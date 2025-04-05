@@ -12,6 +12,8 @@
 #include "autoconf.h"
 
 #define DEFAULT_CONTROLLER ControllerTypePID
+// #define CONFIG_CONTROLLER_MELLINGER // turn on Mellinger controller
+
 static ControllerType currentController = ControllerTypeAutoSelect;
 
 static void initController();

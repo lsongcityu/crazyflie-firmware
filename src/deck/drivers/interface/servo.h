@@ -55,7 +55,12 @@ bool servoTest(void);
  * @param: angle: desired servo angle in degrees
  */
 void servoSetAngle(uint8_t angle);
-
+/**
+ *
+ * @brief Set servo angle.
+ * @param: angle: desired servo angle in degrees
+ */
+void servoSetAngle2(uint8_t angle);
 /**
  * Servo angle parameter callback. When servo angle is changed, call
  * function to change servo angle automatically
