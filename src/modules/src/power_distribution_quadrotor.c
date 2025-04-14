@@ -50,6 +50,8 @@ static uint32_t idleThrust = DEFAULT_IDLE_THRUST;
 static float armLength = ARM_LENGTH; // m
 static float thrustToTorque = 0.005964552f;
 
+static  int32_t thrust_offset = 32750;
+
 // thrust = a * pwm^2 + b * pwm
 //    where PWM is normalized (range 0...1)
 //          thrust is in Newtons (per rotor)
@@ -96,31 +98,90 @@ static void powerDistributionLegacy(const control_t *control, motors_thrust_unca
   // int16_t p = control->pitch / 2.0f;
 
   int32_t att[4];
-  att[0] = -control->roll + control->pitch + control->yaw;
-  att[1] = -control->roll - control->pitch - control->yaw;
-  att[2] = +control->roll - control->pitch + control->yaw;
-  att[3] = +control->roll + control->pitch - control->yaw;
-
-  // for x-config quadcopter
-  int32_t min = att[0];
-  for (int mi = 1; mi < 4; mi++)
+  // att[0] = -control->roll + control->pitch + control->yaw;
+  // att[1] = -control->roll - control->pitch - control->yaw;
+  // att[2] = +control->roll - control->pitch + control->yaw;
+  // att[3] = +control->roll + control->pitch - control->yaw;
+  if ((int32_t)control->thrust < 10)
   {
-    if (att[mi] < min)
-      min = att[mi];
+    att[0] = thrust_offset;
+    att[1] = thrust_offset;
+    att[2] = thrust_offset;
+    att[3] = thrust_offset;
   }
-  int32_t thrust;
-  if (control->thrust < -min)
-    thrust = -min;
-  else
-    thrust = (uint32_t)control->thrust;
-
-  if (thrust > 100)
+  else if (((int32_t)control->thrust - thrust_offset)>10)
+  {
+    att[0] = -control->roll + control->pitch + control->yaw;
+    att[1] = -control->roll - control->pitch - control->yaw;
+    att[2] = +control->roll - control->pitch + control->yaw;
+    att[3] = +control->roll + control->pitch - control->yaw;
+    
+    int32_t min = att[0];
+    for (int mi = 1; mi < 4; mi++)
+    {
+      if (att[mi] < min)
+        min = att[mi];
+    }
+    int32_t thrust = (int32_t)control->thrust - thrust_offset;
+    if (thrust < -min)
+      thrust = -min;
     thrust = thrust + min_thrust;
+    att[0] = (att[0] + thrust) + thrust_offset;
+    att[1] = (att[1] + thrust) + thrust_offset;
+    att[2] = (att[2] + thrust) + thrust_offset;
+    att[3] = (att[3] + thrust) + thrust_offset;
+  }
+  else if (((int32_t)control->thrust - thrust_offset)< -10)
+  {
 
-  att[0] = att[0] + thrust;
-  att[1] = att[1] + thrust;
-  att[2] = att[2] + thrust;
-  att[3] = att[3] + thrust;
+    att[0] = (+control->roll - control->pitch - control->yaw);
+    att[1] = (+control->roll + control->pitch + control->yaw);
+    att[2] = (-control->roll + control->pitch - control->yaw);
+    att[3] = (-control->roll - control->pitch + control->yaw);
+    
+    int32_t min = att[0];
+    for (int mi = 1; mi < 4; mi++)
+    {
+      if (att[mi] < min)
+        min = att[mi];
+    }
+    int32_t thrust = -(int32_t)control->thrust + thrust_offset;
+    if (thrust < -min)
+      thrust = -min;
+    thrust = thrust + min_thrust;
+    att[0] = -(att[0] + thrust) + thrust_offset;
+    att[1] = -(att[1] + thrust) + thrust_offset;
+    att[2] = -(att[2] + thrust) + thrust_offset;
+    att[3] = -(att[3] + thrust) + thrust_offset;
+  }
+  else
+  {
+    att[0] = thrust_offset+min_thrust;
+    att[1] = thrust_offset+min_thrust;
+    att[2] = thrust_offset+min_thrust;
+    att[3] = thrust_offset+min_thrust;
+  }
+
+  // // for x-config quadcopter
+  // int32_t min = att[0];
+  // for (int mi = 1; mi < 4; mi++)
+  // {
+  //   if (att[mi] < min)
+  //     min = att[mi];
+  // }
+  // int32_t thrust;
+  // if (control->thrust < -min)
+  //   thrust = -min;
+  // else
+  //   thrust = (uint32_t)control->thrust;
+
+  // if (thrust > 100)
+  //   thrust = thrust + min_thrust;
+
+  // att[0] = att[0] + thrust;
+  // att[1] = att[1] + thrust;
+  // att[2] = att[2] + thrust;
+  // att[3] = att[3] + thrust;
 
   motorThrustUncapped->motors.m1 = limitUint16(att[0]);
   motorThrustUncapped->motors.m2 = limitUint16(att[1]);
