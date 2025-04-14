@@ -33,6 +33,7 @@
 #include "crtp_localization_service.h"
 #include "log.h"
 #include "param.h"
+#include "sensfusion6.h"
 
 #include "stabilizer_types.h"
 #include "stabilizer.h"
@@ -185,7 +186,7 @@ static void extPositionHandler(CRTPPacket* pk) {
 }
 
 static void extPoseHandler(const CRTPPacket* pk) {
-  const struct CrtpExtPose* data = (const struct CrtpExtPose*)&pk->data[1];
+  const struct CrtpExtPose *data = (const struct CrtpExtPose *)&pk->data[1];
 
   ext_pose.x = data->x;
   ext_pose.y = data->y;
@@ -194,10 +195,23 @@ static void extPoseHandler(const CRTPPacket* pk) {
   ext_pose.quat.y = data->qy;
   ext_pose.quat.z = data->qz;
   ext_pose.quat.w = data->qw;
+  // ext_pose.quat.x = 0.0f;
+  // ext_pose.quat.y = 1.0f;
+  // ext_pose.quat.z = 0.0f;
+  // ext_pose.quat.w = 0.0f;
   ext_pose.stdDevPos = extPosStdDev;
   ext_pose.stdDevQuat = extQuatStdDev;
 
-  estimatorEnqueuePose(&ext_pose);
+  // estimatorEnqueuePose(&ext_pose);
+
+  // send these data to sensfusion6
+  if (fabsf(ext_pose.x) < 0.001f)
+    setquat(data->qw, data->qx, data->qy, data->qz); // directly update a correct attitude
+  else if (fabsf(ext_pose.x - 1.0f) < 0.001f)
+    applyquat(data->qw, data->qx, data->qy, data->qz); // apply the attitude correction matrix to current attitude
+  else if (fabsf(ext_pose.x - 2.0f) < 0.001f)
+    applyquat_body(data->qw, data->qx, data->qy, data->qz); // apply the attitude correction matrix to current attitude
+
   tickOfLastPacket = xTaskGetTickCount();
 }
 

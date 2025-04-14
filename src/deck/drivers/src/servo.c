@@ -119,47 +119,6 @@ void servoMapInit(const MotorPerifDef* servoMapSelect)
   TIM_Cmd(servoMap->tim, ENABLE);
 }
 
-void servoMapInit2(const MotorPerifDef* servoMapSelect)
-{
-  servoMap2 = servoMapSelect;
-
-  GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
-  TIM_OCInitTypeDef  TIM_OCInitStructure;
-
-  RCC_AHB1PeriphClockCmd(servoMap2->gpioPerif, ENABLE);
-  RCC_APB1PeriphClockCmd(servoMap2->timPerif, ENABLE);
-
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_NOPULL;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_Pin = servoMap2->gpioPin;
-  GPIO_Init(servoMap2->gpioPort, &GPIO_InitStructure);
-
-  GPIO_PinAFConfig(servoMap2->gpioPort, servoMap2->gpioPinSource, servoMap2->gpioAF);
-
-  TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD;
-  TIM_TimeBaseStructure.TIM_Prescaler = SERVO_PWM_PRESCALE;
-  TIM_TimeBaseStructure.TIM_ClockDivision = 0;
-  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-  TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
-  TIM_TimeBaseInit(servoMap2->tim, &TIM_TimeBaseStructure);
-
-  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
-  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStructure.TIM_Pulse = 0;
-  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-  TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
-
-  servoMap2->ocInit(servoMap2->tim, &TIM_OCInitStructure);
-  servoMap2->preloadConfig(servoMap2->tim, TIM_OCPreload_Enable);
-
-  TIM_CtrlPWMOutputs(servoMap2->tim, ENABLE);
-  servoMap2->setCompare(servoMap2->tim, 0x00);
-
-  TIM_Cmd(servoMap2->tim, ENABLE);
-}
 void servoInit()
 {
   if (isInit){
@@ -168,7 +127,6 @@ void servoInit()
 
   #if defined(CONFIG_DECK_SERVO_USE_IO1) || defined(CONFIG_DECK_SERVO_USE_IO2)
     servoMapInit(servoMapIO1);
-    servoMapInit2(servoMapIO2);
     DEBUG_PRINT("Init on IO1, IO2 [OK]\n");
   #elif CONFIG_DECK_SERVO_USE_IO2
     servoMapInit(servoMapIO2);
@@ -192,7 +150,6 @@ void servoInit()
   #endif
   
   servoSetAngle(saturateAngle(servo_idle));
-  servoSetAngle2(saturateAngle(servo_idle));
 
   s_servo_angle = servo_idle;
   s_servo_angle2 = servo_idle;
@@ -217,17 +174,6 @@ void servoSetAngle(uint8_t angle)
   
   #ifdef DEBUG_SERVO
     DEBUG_PRINT("Set Angle: %u deg, pulse width: %f us \n", angle, pulse_length_us);
-  #endif
-}
-void servoSetAngle2(uint8_t angle)
-{
-  double pulse_length_us = (double)(angle) / servo_range * (servo_MAX_us - servo_MIN_us) + servo_MIN_us;
-  double pulse_length_s = pulse_length_us / 1000000;
-  const uint32_t ccr_val = (uint32_t)(pulse_length_s * SERVO_PWM_PERIOD * SERVO_PWM_FREQUENCY_HZ);
-  servoMap2->setCompare(servoMap2->tim, ccr_val);
-
-  #ifdef DEBUG_SERVO
-    DEBUG_PRINT("Set Angle 2: %u deg, pulse width: %f us \n", angle, pulse_length_us);
   #endif
 }
 

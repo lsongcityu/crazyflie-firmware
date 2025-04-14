@@ -32,6 +32,8 @@
 
 #include "autoconf.h"
 
+static uint8_t gravity_correction = 1;
+
 #ifdef CONFIG_IMU_MADGWICK_QUATERNION
   #define BETA_DEF     0.01f    // 2 * proportional gain
 #else // MAHONY_QUATERNION_IMU
@@ -53,6 +55,42 @@ float qw = 1.0f;
 float qx = 0.0f;
 float qy = 0.0f;
 float qz = 0.0f;  // quaternion of sensor frame relative to auxiliary frame
+
+void quaternion_multiply(
+  float q1w, float q1x, float q1y, float q1z,
+  float q2w, float q2x, float q2y, float q2z,
+  float *q3w, float *q3x, float *q3y, float *q3z)
+{
+*q3w = q1w * q2w - q1x * q2x - q1y * q2y - q1z * q2z;
+*q3x = q1w * q2x + q1x * q2w + q1y * q2z - q1z * q2y;
+*q3y = q1w * q2y - q1x * q2z + q1y * q2w + q1z * q2x;
+*q3z = q1w * q2z + q1x * q2y - q1y * q2x + q1z * q2w;
+}
+
+void setquat(float w, float x, float y, float z)
+{
+qw = w;
+qx = x;
+qy = y;
+qz = z;
+}
+
+void applyquat(float w, float x, float y, float z) // Relta_R * R
+{
+quaternion_multiply(
+    w, x, y, z,
+    qw, qx, qy, qz,
+    &qw, &qx, &qy, &qz);
+}
+
+void applyquat_body(float w, float x, float y, float z) //  R * Relta_R
+{
+quaternion_multiply(
+    qw, qx, qy, qz,
+    w, x, y, z,
+    &qw, &qx, &qy, &qz);
+}
+
 
 static float gravX, gravY, gravZ; // Unit vector in the estimated gravity direction
 
@@ -117,6 +155,8 @@ static void sensfusion6UpdateQImpl(float gx, float gy, float gz, float ax, float
   qDot4 = 0.5f * (qw * gz + qx * gy - qy * gx);
 
   // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+  if (gravity_correction)
+  {
   if(!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f)))
   {
     // Normalise accelerometer measurement
@@ -157,7 +197,7 @@ static void sensfusion6UpdateQImpl(float gx, float gy, float gz, float ax, float
     qDot3 -= beta * s2;
     qDot4 -= beta * s3;
   }
-
+  }
   // Integrate rate of change of quaternion to yield quaternion
   qw += qDot1 * dt;
   qx += qDot2 * dt;
@@ -190,6 +230,8 @@ static void sensfusion6UpdateQImpl(float gx, float gy, float gz, float ax, float
   gz = gz * M_PI_F / 180;
 
   // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+  if (gravity_correction)
+  {
   if(!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f)))
   {
     // Normalise accelerometer measurement
@@ -230,7 +272,7 @@ static void sensfusion6UpdateQImpl(float gx, float gy, float gz, float ax, float
     gy += twoKp * halfey;
     gz += twoKp * halfez;
   }
-
+}
   // Integrate rate of change of quaternion
   gx *= (0.5f * dt);   // pre-multiply common factors
   gy *= (0.5f * dt);
@@ -381,4 +423,5 @@ PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, kp, &twoKp)
 PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, ki, &twoKi)
 #endif
 PARAM_ADD(PARAM_FLOAT, baseZacc, &baseZacc)
+PARAM_ADD(PARAM_UINT8, gc, &gravity_correction)
 PARAM_GROUP_STOP(sensfusion6)

@@ -260,24 +260,6 @@ static void controlMotors(const control_t* control) {
   setMotorRatios(&motorPwm);
 }
 
-static void controlServo(const control_t* control) {
-  // Set the servo angles based on the control output
-  float rollValue = control->roll / 100.0f + 0.5f * UINT8_MAX;
-  float pitchValue = control->pitch / 100.0f + 0.5f * UINT8_MAX;
-
-  // Clamp the values to the range [0, UINT8_MAX]
-  rollValue = fminf(fmaxf(rollValue, 0.0f), (float)UINT8_MAX);
-  pitchValue = fminf(fmaxf(pitchValue, 0.0f), (float)UINT8_MAX);
-
-  uint8_t servoAngle = (uint8_t)rollValue;
-  uint8_t servoAngle2 = (uint8_t)pitchValue;
-
-  servoSetAngle(servoAngle);
-  servoSetAngle2(servoAngle2);
-  // servoSetAngle(0.1f*UINT8_MAX);
-  // servoSetAngle2(0.9f*UINT8_MAX);
-}
-
 void rateSupervisorTask(void *pvParameters) {
   while (1) {
     // Wait for the semaphore to be given by the stabilizerTask
@@ -343,10 +325,10 @@ static void stabilizerTask(void* param)
 
       stateEstimator(&state, stabilizerStep);
 
-      const bool areMotorsAllowedToRun = supervisorAreMotorsAllowedToRun();
+      // const bool areMotorsAllowedToRun = supervisorAreMotorsAllowedToRun();
 
-      // Critical for safety, be careful if you modify this code!
-      crtpCommanderBlock(! areMotorsAllowedToRun);
+      // // Critical for safety, be careful if you modify this code!
+      // crtpCommanderBlock(! areMotorsAllowedToRun);
 
       if (crtpCommanderHighLevelGetSetpoint(&tempSetpoint, &state, stabilizerStep)) {
         commanderSetSetpoint(&tempSetpoint, COMMANDER_PRIORITY_HIGHLEVEL);
@@ -374,7 +356,6 @@ static void stabilizerTask(void* param)
       //   motorsStop();
       // }
       controlMotors(&control);
-      controlServo(&control);
       // servoSetAngle(0.9f*UINT8_MAX);
       // servoSetAngle2(0.9f*UINT8_MAX);
 
