@@ -341,7 +341,7 @@ static void stabilizerTask(void* param)
 
       // Critical for safety, be careful if you modify this code!
       // Let the supervisor modify the setpoint to handle exceptional conditions
-      supervisorOverrideSetpoint(&setpoint);
+      // supervisorOverrideSetpoint(&setpoint);
 
       controller(&control, &setpoint, &sensorData, &state, stabilizerStep);
 
