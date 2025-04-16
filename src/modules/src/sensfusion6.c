@@ -38,7 +38,7 @@
     #define TWO_KP_DEF  (2.0f * 0.4f) // 2 * proportional gain
     #define TWO_KI_DEF  (2.0f * 0.001f) // 2 * integral gain
 #endif
-
+static uint8_t gravity_correction = 1;
 #ifdef CONFIG_IMU_MADGWICK_QUATERNION
   float beta = BETA_DEF;     // 2 * proportional gain (Kp)
 #else // MAHONY_QUATERNION_IMU
@@ -53,6 +53,14 @@ float qw = 1.0f;
 float qx = 0.0f;
 float qy = 0.0f;
 float qz = 0.0f;  // quaternion of sensor frame relative to auxiliary frame
+
+void setquat(float w, float x, float y, float z)
+ {
+ qw = w;
+ qx = x;
+ qy = y;
+ qz = z;
+ }
 
 static float gravX, gravY, gravZ; // Unit vector in the estimated gravity direction
 
@@ -117,6 +125,8 @@ static void sensfusion6UpdateQImpl(float gx, float gy, float gz, float ax, float
   qDot4 = 0.5f * (qw * gz + qx * gy - qy * gx);
 
   // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+  if (gravity_correction)
+  {
   if(!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f)))
   {
     // Normalise accelerometer measurement
@@ -157,6 +167,7 @@ static void sensfusion6UpdateQImpl(float gx, float gy, float gz, float ax, float
     qDot3 -= beta * s2;
     qDot4 -= beta * s3;
   }
+  }
 
   // Integrate rate of change of quaternion to yield quaternion
   qw += qDot1 * dt;
@@ -190,6 +201,8 @@ static void sensfusion6UpdateQImpl(float gx, float gy, float gz, float ax, float
   gz = gz * M_PI_F / 180;
 
   // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+  if (gravity_correction)
+  {
   if(!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f)))
   {
     // Normalise accelerometer measurement
@@ -229,6 +242,7 @@ static void sensfusion6UpdateQImpl(float gx, float gy, float gz, float ax, float
     gx += twoKp * halfex;
     gy += twoKp * halfey;
     gz += twoKp * halfez;
+  }
   }
 
   // Integrate rate of change of quaternion
@@ -381,4 +395,5 @@ PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, kp, &twoKp)
 PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, ki, &twoKi)
 #endif
 PARAM_ADD(PARAM_FLOAT, baseZacc, &baseZacc)
+PARAM_ADD(PARAM_UINT8, gc, &gravity_correction)
 PARAM_GROUP_STOP(sensfusion6)

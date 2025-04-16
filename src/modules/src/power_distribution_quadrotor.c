@@ -49,7 +49,7 @@
 static uint32_t idleThrust = DEFAULT_IDLE_THRUST;
 static float armLength = ARM_LENGTH; // m
 static float thrustToTorque = 0.005964552f;
-
+static uint16_t min_thrust = 5000;
 // thrust = a * pwm^2 + b * pwm
 //    where PWM is normalized (range 0...1)
 //          thrust is in Newtons (per rotor)
@@ -91,13 +91,44 @@ static uint16_t capMinThrust(float thrust, uint32_t minThrust) {
 
 static void powerDistributionLegacy(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped)
 {
-  int16_t r = control->roll / 2.0f;
-  int16_t p = control->pitch / 2.0f;
+  // int16_t r = control->roll / 2.0f;
+  // int16_t p = control->pitch / 2.0f;
 
-  motorThrustUncapped->motors.m1 = control->thrust - r + p + control->yaw;
-  motorThrustUncapped->motors.m2 = control->thrust - r - p - control->yaw;
-  motorThrustUncapped->motors.m3 = control->thrust + r - p + control->yaw;
-  motorThrustUncapped->motors.m4 = control->thrust + r + p - control->yaw;
+  // motorThrustUncapped->motors.m1 = control->thrust - r + p + control->yaw;
+  // motorThrustUncapped->motors.m2 = control->thrust - r - p - control->yaw;
+  // motorThrustUncapped->motors.m3 = control->thrust + r - p + control->yaw;
+  // motorThrustUncapped->motors.m4 = control->thrust + r + p - control->yaw;
+  int32_t att[4];
+   att[0] = -control->roll + control->pitch + control->yaw;
+   att[1] = -control->roll - control->pitch - control->yaw;
+   att[2] = +control->roll - control->pitch + control->yaw;
+   att[3] = +control->roll + control->pitch - control->yaw;
+ 
+   // for x-config quadcopter
+   int32_t min = att[0];
+   for (int mi = 1; mi < 4; mi++)
+   {
+     if (att[mi] < min)
+       min = att[mi];
+   }
+   int32_t thrust;
+   if (control->thrust < -min)
+     thrust = -min;
+   else
+     thrust = (uint32_t)control->thrust;
+ 
+   if (thrust > 100)
+     thrust = thrust + min_thrust;
+ 
+   att[0] = att[0] + thrust;
+   att[1] = att[1] + thrust;
+   att[2] = att[2] + thrust;
+   att[3] = att[3] + thrust;
+ 
+   motorThrustUncapped->motors.m1 = limitUint16(att[0]);
+   motorThrustUncapped->motors.m2 = limitUint16(att[1]);
+   motorThrustUncapped->motors.m3 = limitUint16(att[2]);
+   motorThrustUncapped->motors.m4 = limitUint16(att[3]);
 }
 
 static void powerDistributionForceTorque(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped) {

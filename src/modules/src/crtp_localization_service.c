@@ -52,7 +52,7 @@
 #include "peer_localization.h"
 
 #include "num.h"
-
+#include "sensfusion6.h"
 
 #define NBR_OF_RANGES_IN_PACKET   5
 #define NBR_OF_SWEEPS_IN_PACKET   2
@@ -197,7 +197,9 @@ static void extPoseHandler(const CRTPPacket* pk) {
   ext_pose.stdDevPos = extPosStdDev;
   ext_pose.stdDevQuat = extQuatStdDev;
 
-  estimatorEnqueuePose(&ext_pose);
+  // estimatorEnqueuePose(&ext_pose);
+  if (fabsf(ext_pose.x) < 0.001f)
+     setquat(data->qw, data->qx, data->qy, data->qz); // directly update a correct attitude
   tickOfLastPacket = xTaskGetTickCount();
 }
 
