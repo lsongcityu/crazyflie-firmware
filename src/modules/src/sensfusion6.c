@@ -62,6 +62,34 @@ void setquat(float w, float x, float y, float z)
  qz = z;
  }
 
+
+ void quaternion_multiply(
+  float q1w, float q1x, float q1y, float q1z,
+  float q2w, float q2x, float q2y, float q2z,
+  float *q3w, float *q3x, float *q3y, float *q3z)
+{
+*q3w = q1w * q2w - q1x * q2x - q1y * q2y - q1z * q2z;
+*q3x = q1w * q2x + q1x * q2w + q1y * q2z - q1z * q2y;
+*q3y = q1w * q2y - q1x * q2z + q1y * q2w + q1z * q2x;
+*q3z = q1w * q2z + q1x * q2y - q1y * q2x + q1z * q2w;
+}
+
+void applyquat(float w, float x, float y, float z) // Relta_R * R
+{
+quaternion_multiply(
+    w, x, y, z,
+    qw, qx, qy, qz,
+    &qw, &qx, &qy, &qz);
+}
+
+void applyquat_body(float w, float x, float y, float z) //  R * Relta_R
+{
+quaternion_multiply(
+    qw, qx, qy, qz,
+    w, x, y, z,
+    &qw, &qx, &qy, &qz);
+}
+
 static float gravX, gravY, gravZ; // Unit vector in the estimated gravity direction
 
 // The acc in Z for static position (g)

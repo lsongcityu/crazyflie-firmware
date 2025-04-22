@@ -35,5 +35,7 @@ void sensfusion6GetQuaternion(float* qx, float* qy, float* qz, float* qw);
 void sensfusion6GetEulerRPY(float* roll, float* pitch, float* yaw);
 float sensfusion6GetAccZWithoutGravity(const float ax, const float ay, const float az);
 void setquat(float w, float x, float y, float z);
+void applyquat(float w, float x, float y, float z);
+void applyquat_body(float w, float x, float y, float z); 
 
 #endif /* SENSORFUSION6_H_ */
