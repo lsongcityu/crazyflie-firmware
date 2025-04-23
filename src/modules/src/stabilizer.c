@@ -57,9 +57,13 @@
 #include "static_mem.h"
 #include "rateSupervisor.h"
 
+#include "my_pwm.h"
+#include "stm32f4xx.h"
+
 static bool isInit;
 
 static uint32_t inToOutLatency;
+static uint32_t servo_pwm;
 
 // State variables for the stabilizer
 static setpoint_t setpoint;
@@ -307,6 +311,7 @@ static void stabilizerTask(void* param)
   rateSupervisorInit(&rateSupervisorContext, xTaskGetTickCount(), M2T(1000), 997, 1003, 1);
   xRateSupervisorSemaphore = xSemaphoreCreateBinary();
   STATIC_MEM_TASK_CREATE(rateSupervisorTask, rateSupervisorTask, RATE_SUPERVISOR_TASK_NAME, NULL, RATE_SUPERVISOR_TASK_PRI);
+  PWM_interface_init();
 
   while(1) {
     // The sensor should unlock at 1kHz
@@ -352,6 +357,7 @@ static void stabilizerTask(void* param)
       } else {
         motorsStop();
       }
+      motor_ratio_ctrl(servo_pwm, TIM9, 1);
 
       // Compute compressed log formats
       compressState();
@@ -393,6 +399,7 @@ PARAM_ADD_CORE(PARAM_UINT8, estimator, &estimatorType)
  * @brief Controller type Auto select(0), PID(1), Mellinger(2), INDI(3), Brescianini(4), Lee(5) (Default: 0)
  */
 PARAM_ADD_CORE(PARAM_UINT8, controller, &controllerType)
+PARAM_ADD_CORE(PARAM_UINT32, servo_pwm, &servo_pwm)
 PARAM_GROUP_STOP(stabilizer)
 
 
