@@ -22,8 +22,11 @@
  */
 
 void PWM_interface_init(void); // Initialize *ALL* PWM channels
+void PWM_interface_init_servo(void); // Initialize *ALL* servo channels
 void PWM_ratio_ctrl(uint32_t pwm_ratio, TIM_TypeDef *TIMx, uint16_t channel);
 void motor_ratio_ctrl(uint32_t motor_ratio, TIM_TypeDef *TIMx, uint16_t channel);
+void servo_angle_ctrl(uint8_t angle, TIM_TypeDef *TIMx, uint16_t channel);
+void servo_pulse_ctrl(uint16_t pulse_us, TIM_TypeDef *TIMx, uint16_t channel);
 
 void TIM9C1_init(void);
 void TIM9C2_init(void);
@@ -39,5 +42,20 @@ void TIM13C1_init(void);
 void TIM14C1_init(void);
 
 void TIM8C1N_init(void);
+
+void TIM9C1_init_servo(void);
+void TIM9C2_init_servo(void);
+
+void TIM4C3_init_servo(void);
+void TIM4C2C1_init_servo(void);
+
+void TIM3C1_init_servo(void);
+void TIM3C2_init_servo(void);
+
+void TIM13C1_init_servo(void);
+
+void TIM14C1_init_servo(void);
+
+void TIM8C1N_init_servo(void);
 
 #endif

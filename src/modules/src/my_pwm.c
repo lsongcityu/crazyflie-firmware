@@ -33,6 +33,15 @@
 #include "stm32f4xx_tim.h"
 #include "stm32f4xx_rcc.h"
 
+// Servo PWM parameters
+#define SERVO_PWM_FREQ        50      // 50Hz (20ms period)
+#define SERVO_PWM_MIN_PULSE   500     // 500us minimum pulse width (extended range)
+#define SERVO_PWM_MAX_PULSE   2500    // 2500us maximum pulse width (extended range)
+#define SERVO_PWM_PERIOD      (20000) // 20ms in microseconds (for 50Hz)
+
+// Assuming system clock is 168MHz (adjust according to your system)
+#define SYSTEM_CLOCK_FREQ     168000000 // 168MHz
+
 /**
  * Parameters of the PWM interface
  * PA2->TIM9 CH1
@@ -702,6 +711,412 @@ void TIM8C1N_init(void)
   // Start the timer
   TIM_Cmd(TIM8, ENABLE);
 }
+ 
+ //Initialize TIM9 CH1(PA2) for servo
+ void TIM9_CH1_init_servo(void)
+ {
+   TIM_Cmd(TIM9, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+   RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM9, ENABLE);
+ 
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = MOTORS_PA2_T9C1.gpioOType;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PA2_T9C1.gpioPin;
+   GPIO_Init(MOTORS_PA2_T9C1.gpioPort, &GPIO_InitStructure);
+ 
+   GPIO_PinAFConfig(MOTORS_PA2_T9C1.gpioPort, MOTORS_PA2_T9C1.gpioPinSource, MOTORS_PA2_T9C1.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM9, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+ 
+   MOTORS_PA2_T9C1.ocInit(TIM9, &TIM_OCInitStructure);
+   MOTORS_PA2_T9C1.preloadConfig(TIM9, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM9, ENABLE);
+ }
+ 
+ //Initialize TIM9 CH2(PA3) for servo
+ void TIM9_CH2_init_servo(void)
+ {
+   TIM_Cmd(TIM9, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+   RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM9, ENABLE);
+ 
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = MOTORS_PA3_T9C2.gpioOType;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PA3_T9C2.gpioPin;
+   GPIO_Init(MOTORS_PA3_T9C2.gpioPort, &GPIO_InitStructure);
+ 
+   GPIO_PinAFConfig(MOTORS_PA3_T9C2.gpioPort, MOTORS_PA3_T9C2.gpioPinSource, MOTORS_PA3_T9C2.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM9, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+ 
+   MOTORS_PA3_T9C2.ocInit(TIM9, &TIM_OCInitStructure);
+   MOTORS_PA3_T9C2.preloadConfig(TIM9, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM9, ENABLE);
+ }
+ 
+ //Initialize TIM4 CH3(PB8) for servo
+ void TIM4_CH3_init_servo(void)
+ {
+   TIM_Cmd(TIM4, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+ 
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PB8_T4C3.gpioPin;
+   GPIO_Init(MOTORS_PB8_T4C3.gpioPort, &GPIO_InitStructure);
+ 
+   GPIO_PinAFConfig(MOTORS_PB8_T4C3.gpioPort, MOTORS_PB8_T4C3.gpioPinSource, MOTORS_PB8_T4C3.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+ 
+   MOTORS_PB8_T4C3.ocInit(TIM4, &TIM_OCInitStructure);
+   MOTORS_PB8_T4C3.preloadConfig(TIM4, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM4, ENABLE);
+ }
+ 
+ //Initialize TIM4 CH2(PB7) and CH1(PB6) for servo
+ void TIM4_CH2_CH1_init_servo(void)
+ {
+   TIM_Cmd(TIM4, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+ 
+   // Configure PB7 (CH2)
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PB7_T4C2.gpioPin;
+   GPIO_Init(MOTORS_PB7_T4C2.gpioPort, &GPIO_InitStructure);
+   GPIO_PinAFConfig(MOTORS_PB7_T4C2.gpioPort, MOTORS_PB7_T4C2.gpioPinSource, MOTORS_PB7_T4C2.gpioAF);
+ 
+   // Configure PB6 (CH1)
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PB6_T4C1.gpioPin;
+   GPIO_Init(MOTORS_PB6_T4C1.gpioPort, &GPIO_InitStructure);
+   GPIO_PinAFConfig(MOTORS_PB6_T4C1.gpioPort, MOTORS_PB6_T4C1.gpioPinSource, MOTORS_PB6_T4C1.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+ 
+   // Configure CH2 (PB7)
+   MOTORS_PB7_T4C2.ocInit(TIM4, &TIM_OCInitStructure);
+   MOTORS_PB7_T4C2.preloadConfig(TIM4, TIM_OCPreload_Enable);
+   
+   // Configure CH1 (PB6)
+   MOTORS_PB6_T4C1.ocInit(TIM4, &TIM_OCInitStructure);
+   MOTORS_PB6_T4C1.preloadConfig(TIM4, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM4, ENABLE);
+ }
+ 
+ //Initialize TIM3 CH1(PB4) for servo
+ void TIM3_CH1_init_servo(void)
+ {
+   TIM_Cmd(TIM3, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+ 
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PB4_T3C1.gpioPin;
+   GPIO_Init(MOTORS_PB4_T3C1.gpioPort, &GPIO_InitStructure);
+ 
+   GPIO_PinAFConfig(MOTORS_PB4_T3C1.gpioPort, MOTORS_PB4_T3C1.gpioPinSource, MOTORS_PB4_T3C1.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+ 
+   MOTORS_PB4_T3C1.ocInit(TIM3, &TIM_OCInitStructure);
+   MOTORS_PB4_T3C1.preloadConfig(TIM3, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM3, ENABLE);
+ }
+ 
+ //Initialize TIM3 CH2(PB5) for servo
+ void TIM3_CH2_init_servo(void)
+ {
+   TIM_Cmd(TIM3, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+ 
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PB5_T3C2.gpioPin;
+   GPIO_Init(MOTORS_PB5_T3C2.gpioPort, &GPIO_InitStructure);
+ 
+   GPIO_PinAFConfig(MOTORS_PB5_T3C2.gpioPort, MOTORS_PB5_T3C2.gpioPinSource, MOTORS_PB5_T3C2.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+ 
+   MOTORS_PB5_T3C2.ocInit(TIM3, &TIM_OCInitStructure);
+   MOTORS_PB5_T3C2.preloadConfig(TIM3, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM3, ENABLE);
+ }
+ 
+ //Initialize TIM13 CH1(PA6) for servo
+ void TIM13_CH1_init_servo(void)
+ {
+   TIM_Cmd(TIM13, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM13, ENABLE);
+ 
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PA6_T13C1.gpioPin;
+   GPIO_Init(MOTORS_PA6_T13C1.gpioPort, &GPIO_InitStructure);
+ 
+   GPIO_PinAFConfig(MOTORS_PA6_T13C1.gpioPort, MOTORS_PA6_T13C1.gpioPinSource, MOTORS_PA6_T13C1.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM13, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+ 
+   MOTORS_PA6_T13C1.ocInit(TIM13, &TIM_OCInitStructure);
+   MOTORS_PA6_T13C1.preloadConfig(TIM13, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM13, ENABLE);
+ }
+ 
+ //Initialize TIM14 CH1(PA7) for servo
+ void TIM14_CH1_init_servo(void)
+ {
+   TIM_Cmd(TIM14, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM14, ENABLE);
+ 
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PA7_T14C1.gpioPin;
+   GPIO_Init(MOTORS_PA7_T14C1.gpioPort, &GPIO_InitStructure);
+ 
+   GPIO_PinAFConfig(MOTORS_PA7_T14C1.gpioPort, MOTORS_PA7_T14C1.gpioPinSource, MOTORS_PA7_T14C1.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM14, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+ 
+   MOTORS_PA7_T14C1.ocInit(TIM14, &TIM_OCInitStructure);
+   MOTORS_PA7_T14C1.preloadConfig(TIM14, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM14, ENABLE);
+ }
+ 
+ //Initialize TIM8 CH1N(PA5) for servo
+ void TIM8_CH1N_init_servo(void)
+ {
+   TIM_Cmd(TIM8, DISABLE);
+   
+   GPIO_InitTypeDef GPIO_InitStructure;
+   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef TIM_OCInitStructure;
+   TIM_BDTRInitTypeDef TIM_BDTRInitStructure;
+ 
+   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+   RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM8, ENABLE);
+ 
+   GPIO_StructInit(&GPIO_InitStructure);
+   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+   GPIO_InitStructure.GPIO_Pin = MOTORS_PA5_T8C1N.gpioPin;
+   GPIO_Init(MOTORS_PA5_T8C1N.gpioPort, &GPIO_InitStructure);
+ 
+   GPIO_PinAFConfig(MOTORS_PA5_T8C1N.gpioPort, MOTORS_PA5_T8C1N.gpioPinSource, MOTORS_PA5_T8C1N.gpioAF);
+ 
+   uint32_t prescaler = (SYSTEM_CLOCK_FREQ / (SERVO_PWM_FREQ * SERVO_PWM_PERIOD)) - 1;
+   
+   TIM_TimeBaseStructure.TIM_Period = SERVO_PWM_PERIOD - 1;
+   TIM_TimeBaseStructure.TIM_Prescaler = prescaler;
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+   TIM_TimeBaseInit(TIM8, &TIM_TimeBaseStructure);
+ 
+   TIM_SelectOutputTrigger(TIM8, TIM_TRGOSource_Reset);
+   TIM_SelectMasterSlaveMode(TIM8, TIM_MasterSlaveMode_Disable);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+   TIM_OCInitStructure.TIM_Pulse = (SERVO_PWM_MIN_PULSE + SERVO_PWM_MAX_PULSE) / 2;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+   TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCNPolarity_High;
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;
+   TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
+   TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
+ 
+   TIM_BDTRConfig(TIM8, &TIM_BDTRInitStructure);
+ 
+   MOTORS_PA5_T8C1N.ocInit(TIM8, &TIM_OCInitStructure);
+   MOTORS_PA5_T8C1N.preloadConfig(TIM8, TIM_OCPreload_Enable);
+ 
+   TIM_Cmd(TIM8, ENABLE);
+ }
+ 
+ /**
+  * Initialize all PWM interfaces for servo control
+  */
+ void PWM_interface_init_servo(void)
+ {
+   //Initialize all servo channels
+   TIM9_CH1_init_servo();      // PA2
+   TIM9_CH2_init_servo();      // PA3
+  //  TIM4_CH3_init_servo();      // PB8
+  //  TIM4_CH2_CH1_init_servo();  // PB7 and PB6
+  //  TIM3_CH1_init_servo();      // PB4
+  //  TIM3_CH2_init_servo();      // PB5
+  //  TIM13_CH1_init_servo();     // PA6
+  //  TIM14_CH1_init_servo();     // PA7
+  //  TIM8_CH1N_init_servo();     // PA5
+ }
+
 
 /**
  * Initialize the PWM interface
@@ -824,3 +1239,38 @@ void motor_ratio_ctrl(uint32_t motor_ratio, TIM_TypeDef *TIMx, uint16_t channel)
     break;
   }
 }
+
+/**
+  * Servo control functions (same as before)
+  */
+ void servo_angle_ctrl(uint8_t angle, TIM_TypeDef *TIMx, uint16_t channel)
+ {
+   uint32_t pulse_width;
+   
+   if (angle > 180) angle = 180;
+   pulse_width = SERVO_PWM_MIN_PULSE + (angle * (SERVO_PWM_MAX_PULSE - SERVO_PWM_MIN_PULSE) / 180);
+   
+   switch (channel)
+   {
+     case 1: TIMx->CCR1 = pulse_width; break;
+     case 2: TIMx->CCR2 = pulse_width; break;
+     case 3: TIMx->CCR3 = pulse_width; break;
+     case 4: TIMx->CCR4 = pulse_width; break;
+     default: break;
+   }
+ }
+ 
+ void servo_pulse_ctrl(uint16_t pulse_us, TIM_TypeDef *TIMx, uint16_t channel)
+ {
+   if (pulse_us < SERVO_PWM_MIN_PULSE) pulse_us = SERVO_PWM_MIN_PULSE;
+   if (pulse_us > SERVO_PWM_MAX_PULSE) pulse_us = SERVO_PWM_MAX_PULSE;
+   
+   switch (channel)
+   {
+     case 1: TIMx->CCR1 = pulse_us; break;
+     case 2: TIMx->CCR2 = pulse_us; break;
+     case 3: TIMx->CCR3 = pulse_us; break;
+     case 4: TIMx->CCR4 = pulse_us; break;
+     default: break;
+   }
+ }
