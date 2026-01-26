@@ -74,6 +74,17 @@ static motors_thrust_uncapped_t motorThrustUncapped;
 static motors_thrust_uncapped_t motorThrustBatCompUncapped;
 static motors_thrust_pwm_t motorPwm;
 
+static uint8_t servo_mid1 = 60; // for elevator
+static uint8_t servo_range1 = 30; // in degrees
+static uint8_t servo_mid2 = 60; // for aileron
+static uint8_t servo_range2 = 15; // in degrees
+
+static float kp_wing = -1.0f;
+static float kd_wing = 0.01f;
+
+float aileron_dev = 0.0f;
+
+
 // For scratch storage - never logged or passed to other subsystems.
 static setpoint_t tempSetpoint;
 
@@ -84,6 +95,16 @@ static STATS_CNT_RATE_DEFINE(stabilizerRate, 500);
 static rateSupervisor_t rateSupervisorContext;
 static bool rateWarningDisplayed = false;
 SemaphoreHandle_t xRateSupervisorSemaphore;
+
+float limint16(float in)
+{
+  if (in > 32000.0f)
+    return 32000.0f;
+  else if (in < -32000.0f)
+    return -32000.0f;
+  else
+    return in;
+}
 
 static struct {
   // position - mm
@@ -260,23 +281,34 @@ static void controlMotors(const control_t* control) {
   setMotorRatios(&motorPwm);
 }
 
-static void controlServo(const control_t* control) {
-  // Set the servo angles based on the control output
-  float rollValue = control->roll / 100.0f + 0.5f * UINT8_MAX;
-  float pitchValue = control->pitch / 100.0f + 0.5f * UINT8_MAX;
-
-  // Clamp the values to the range [0, UINT8_MAX]
-  rollValue = fminf(fmaxf(rollValue, 0.0f), (float)UINT8_MAX);
-  pitchValue = fminf(fmaxf(pitchValue, 0.0f), (float)UINT8_MAX);
-
-  uint8_t servoAngle = (uint8_t)rollValue;
-  uint8_t servoAngle2 = (uint8_t)pitchValue;
+static void setServo(float servo1, float servo2) {
+  // Set the servo angles based on the input servo values
+  float pitchValue = (float)servo_mid1 + servo1;
+  float rollValue = (float)servo_mid2 + servo2;
+  // Clamp the values to the range [servo_mid - servo_range, servo_mid + servo_range]
+  pitchValue = fminf(fmaxf(pitchValue, (float)(servo_mid1 - servo_range1)), (float)(servo_mid1 + servo_range1));
+  rollValue = fminf(fmaxf(rollValue, (float)(servo_mid2 - servo_range2)), (float)(servo_mid2 + servo_range2));
+  
+  uint8_t servoAngle = (uint8_t)pitchValue;
+  uint8_t servoAngle2 = (uint8_t)rollValue;
 
   servoSetAngle(servoAngle);
   servoSetAngle2(servoAngle2);
-  // servoSetAngle(0.1f*UINT8_MAX);
-  // servoSetAngle2(0.9f*UINT8_MAX);
 }
+// static void controlServo(const control_t* control) {
+//   // Set the servo angles based on the input servo values
+//   float pitchValue = (float)servo_mid1;
+//   float rollValue = (float)servo_mid2 + control->roll / 2000.0f; // scale roll to servo range
+//   // Clamp the values to the range [servo_mid - servo_range, servo_mid + servo_range]
+//   pitchValue = fminf(fmaxf(pitchValue, (float)(servo_mid1 - servo_range1)), (float)(servo_mid1 + servo_range1));
+//   rollValue = fminf(fmaxf(rollValue, (float)(servo_mid2 - servo_range2)), (float)(servo_mid2 + servo_range2));
+  
+//   uint8_t servoAngle = (uint8_t)pitchValue;
+//   uint8_t servoAngle2 = (uint8_t)rollValue;
+
+//   servoSetAngle(servoAngle);
+//   servoSetAngle2(servoAngle2);
+// }
 
 void rateSupervisorTask(void *pvParameters) {
   while (1) {
@@ -365,6 +397,14 @@ static void stabilizerTask(void* param)
       supervisorOverrideSetpoint(&setpoint);
 
       controller(&control, &setpoint, &sensorData, &state, stabilizerStep);
+      
+      aileron_dev = (int16_t)limint16((setpoint.attitude.roll - state.attitude.roll) * kp_wing + (-sensorData.gyro.x) * kd_wing);
+      // aileron_dev = (int16_t)limint16((setpoint.attitude.roll));
+        if (aileron_dev > servo_range2)
+          aileron_dev = servo_range2;
+        else if (aileron_dev < -servo_range2)
+          aileron_dev = -servo_range2;
+      float elevator_dev = (int16_t)limint16((setpoint.attitude.pitch));
 
       // Critical for safety, be careful if you modify this code!
       // The supervisor will already set thrust to 0 in the setpoint if needed, but to be extra sure prevent motors from running.
@@ -374,7 +414,8 @@ static void stabilizerTask(void* param)
       //   motorsStop();
       // }
       controlMotors(&control);
-      controlServo(&control);
+      // controlServo(&control);
+      setServo(elevator_dev,aileron_dev);
       // servoSetAngle(0.9f*UINT8_MAX);
       // servoSetAngle2(0.9f*UINT8_MAX);
 
@@ -418,6 +459,30 @@ PARAM_ADD_CORE(PARAM_UINT8, estimator, &estimatorType)
  * @brief Controller type Auto select(0), PID(1), Mellinger(2), INDI(3), Brescianini(4), Lee(5) (Default: 0)
  */
 PARAM_ADD_CORE(PARAM_UINT8, controller, &controllerType)
+/**
+ * @brief mid position for servo 1
+ */
+PARAM_ADD_CORE(PARAM_UINT8, servomid1, &servo_mid1)
+/**
+ * @brief mid position for servo 2
+ */
+PARAM_ADD_CORE(PARAM_UINT8, servomid2, &servo_mid2)
+/**
+ * @brief range for servo 1
+ */
+PARAM_ADD_CORE(PARAM_UINT8, servorange1, &servo_range1)
+/**
+ * @brief range for servo 2
+ */
+PARAM_ADD_CORE(PARAM_UINT8, servorange2, &servo_range2)
+/**
+ * @brief kp gain for wing aileron control
+ */
+PARAM_ADD_CORE(PARAM_FLOAT, kpwing, &kp_wing)
+/**
+ * @brief kd gain for wing aileron control
+ */
+PARAM_ADD_CORE(PARAM_FLOAT, kdwing, &kd_wing)
 PARAM_GROUP_STOP(stabilizer)
 
 

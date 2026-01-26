@@ -26,8 +26,8 @@
  * Using contributions from: Eric Ewing, Will Wu
  */
 #define DEBUG_MODULE "SERVO"
-#define CONFIG_DECK_SERVO_USE_IO1
-#define CONFIG_DECK_SERVO_USE_IO2
+// #define CONFIG_DECK_SERVO_USE_IO1
+// #define CONFIG_DECK_SERVO_USE_IO2
 
 #include <stdbool.h>
 
@@ -166,13 +166,13 @@ void servoInit()
     return;
   }
 
-  #if defined(CONFIG_DECK_SERVO_USE_IO1) || defined(CONFIG_DECK_SERVO_USE_IO2)
+  #if defined(CONFIG_DECK_SERVO_USE_IO1)
     servoMapInit(servoMapIO1);
-    servoMapInit2(servoMapIO2);
-    DEBUG_PRINT("Init on IO1, IO2 [OK]\n");
+    DEBUG_PRINT("Init on IO1 [OK]\n");
   #elif CONFIG_DECK_SERVO_USE_IO2
     servoMapInit(servoMapIO2);
-    DEBUG_PRINT("Init on IO2 [OK]\n");
+    servoMapInit2(servoMapIO3);
+    DEBUG_PRINT("Init on IO2, IO3 [OK]\n");
   #elif CONFIG_DECK_SERVO_USE_IO3
     servoMapInit(servoMapIO3);
     DEBUG_PRINT("Init on IO3 [OK]\n");
@@ -250,17 +250,22 @@ void servoAngleCallBack(void)
   servoSetAngle(saturateAngle(s_servo_angle));
 }
 
+void servoAngleCallBack2(void)
+{
+  servoSetAngle2(saturateAngle(s_servo_angle2));
+}
+
 static const DeckDriver servo_deck = {
   .vid = 0x00,
   .pid = 0x00,
   .name = "bcServo",
 
-  #if defined(CONFIG_DECK_SERVO_USE_IO1) || defined(CONFIG_DECK_SERVO_USE_IO2)
+  #if defined(CONFIG_DECK_SERVO_USE_IO1)
     .usedPeriph = DECK_USING_TIMER4,
-    .usedGpio = DECK_USING_IO_1 | DECK_USING_IO_2,
+    .usedGpio = DECK_USING_IO_1,
   #elif CONFIG_DECK_SERVO_USE_IO2
     .usedPeriph = DECK_USING_TIMER3,
-    .usedGpio = DECK_USING_IO_2,
+    .usedGpio = DECK_USING_IO_2 | DECK_USING_IO_3,
   #elif CONFIG_DECK_SERVO_USE_IO3
     .usedPeriph = DECK_USING_TIMER3,
     .usedGpio = DECK_USING_IO_3,
@@ -314,5 +319,9 @@ PARAM_ADD(PARAM_UINT8 | PARAM_PERSISTENT, servoIdle, &servo_idle)
  * @brief Servo angular position (in degrees, min = 0, max = servoRange)
  */
 PARAM_ADD_WITH_CALLBACK(PARAM_UINT8 , servoAngle, &s_servo_angle, &servoAngleCallBack)
+/**
+ * @brief Servo angular position (in degrees, min = 0, max = servoRange)
+ */
+PARAM_ADD_WITH_CALLBACK(PARAM_UINT8 , servoAngle2, &s_servo_angle2, &servoAngleCallBack2)
 
 PARAM_GROUP_STOP(servo)
