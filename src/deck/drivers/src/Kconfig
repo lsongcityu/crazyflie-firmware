@@ -482,6 +482,13 @@ config DECK_ACS37800
     default n
     help
         Enables the support for the ACS37800 chip that can measure power/current/voltage.
+
+config DECK_INA228
+    bool "Support for the INA228 power monitor"
+    default n
+    help
+        Enables the INA228 I2C power/current/voltage monitor (e.g. Adafruit breakout).
+        Default I2C address 0x40, 15 mOhm shunt, up to 10 A / 85 V.
       
 config DECK_RPM
     bool "Support the rpm deck"
