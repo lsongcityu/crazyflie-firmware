@@ -47,6 +47,7 @@
 #endif
 
 static uint32_t idleThrust = DEFAULT_IDLE_THRUST;
+static int32_t ThrustBias = 0;
 static float armLength = ARM_LENGTH; // m
 static float thrustToTorque = 0.005964552f;
 
@@ -81,13 +82,13 @@ bool powerDistributionTest(void)
   return pass;
 }
 
-static uint16_t capMinThrust(float thrust, uint32_t minThrust) {
+/*static uint16_t capMinThrust(float thrust, uint32_t minThrust) {
   if (thrust < minThrust) {
     return minThrust;
   }
 
   return thrust;
-}
+}*/
 
 static void powerDistributionLegacy(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped)
 {
@@ -98,10 +99,16 @@ static void powerDistributionLegacy(const control_t *control, motors_thrust_unca
   // motorThrustUncapped->motors.m2 = control->thrust - r - p - control->yaw;
   // motorThrustUncapped->motors.m3 = control->thrust + r - p + control->yaw;
   // motorThrustUncapped->motors.m4 = control->thrust + r + p - control->yaw;
-  motorThrustUncapped->motors.m1 = control->thrust;
+  motorThrustUncapped->motors.m1 = control->thrust+ThrustBias;
   motorThrustUncapped->motors.m2 = control->thrust;
   motorThrustUncapped->motors.m3 = control->thrust;
-  motorThrustUncapped->motors.m4 = control->thrust;
+  motorThrustUncapped->motors.m4 = control->thrust-ThrustBias;
+  if (motorThrustUncapped->motors.m1 < 2000) {
+    motorThrustUncapped->motors.m1 = 0;
+  }
+  if (motorThrustUncapped->motors.m4 < 2000) {
+    motorThrustUncapped->motors.m4 = 0;
+  }
 }
 
 static void powerDistributionForceTorque(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped) {
@@ -132,7 +139,19 @@ static void powerDistributionForceTorque(const control_t *control, motors_thrust
 static void powerDistributionForce(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped) {
   // Not implemented yet
 }
+uint16_t limitThrust(int32_t value, int32_t min, int32_t max, bool* isCapped)
+{
+  if (value < min) {
+    return min;
+  }
 
+  if (value > max) {
+    *isCapped = true;
+    return max;
+  }
+
+  return value;
+}
 void powerDistribution(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped)
 {
   switch (control->controlMode) {
@@ -151,7 +170,7 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t* motor
   }
 }
 
-bool powerDistributionCap(const motors_thrust_uncapped_t* motorThrustBatCompUncapped, motors_thrust_pwm_t* motorPwm)
+/* bool powerDistributionCap(const motors_thrust_uncapped_t* motorThrustBatCompUncapped, motors_thrust_pwm_t* motorPwm)
 {
   const int32_t maxAllowedThrust = UINT16_MAX;
   bool isCapped = false;
@@ -179,6 +198,18 @@ bool powerDistributionCap(const motors_thrust_uncapped_t* motorThrustBatCompUnca
     int32_t thrustCappedUpper = motorThrustBatCompUncapped->list[motorIndex] - reduction;
     motorPwm->list[motorIndex] = capMinThrust(thrustCappedUpper, powerDistributionGetIdleThrust());
   }
+
+  return isCapped;
+}*/
+bool powerDistributionCap(const motors_thrust_uncapped_t* motorThrustBatCompUncapped, motors_thrust_pwm_t* motorPwm)
+{
+  bool isCapped = false;
+
+    motorPwm->motors.m1 = limitThrust(motorThrustBatCompUncapped->motors.m1, 0, UINT16_MAX, &isCapped); // pitch servo
+    motorPwm->motors.m3 = limitThrust(motorThrustBatCompUncapped->motors.m3, 0, UINT16_MAX, &isCapped); // yaw servo
+    motorPwm->motors.m2 = limitThrust(motorThrustBatCompUncapped->motors.m2, idleThrust, UINT16_MAX, &isCapped); // left motor
+    motorPwm->motors.m4 = limitThrust(motorThrustBatCompUncapped->motors.m4, idleThrust, UINT16_MAX, &isCapped); // right motor
+
 
   return isCapped;
 }
@@ -210,6 +241,7 @@ PARAM_GROUP_START(powerDist)
  * common value is between 3000 - 6000.
  */
 PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, idleThrust, &idleThrust)
+PARAM_ADD_CORE(PARAM_INT32 | PARAM_PERSISTENT, ThrustBias, &ThrustBias)
 PARAM_GROUP_STOP(powerDist)
 
 /**

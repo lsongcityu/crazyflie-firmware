@@ -193,10 +193,11 @@ float motorsCompensateBatteryVoltage(uint32_t id, float iThrust, float supplyVol
       return iThrust;
     }
 
-    float thrust = (iThrust / 65536.0f) * 60;
-    float volts = -0.0006239f * thrust * thrust + 0.088f * thrust;
-    float ratio = volts / supplyVoltage;
-    return UINT16_MAX * ratio;
+    // float thrust = (iThrust / 65536.0f) * 60;
+    // float volts = -0.0006239f * thrust * thrust + 0.088f * thrust;
+    // float ratio = volts / supplyVoltage;
+    // return UINT16_MAX * ratio;
+    return iThrust; // for testing purposes only
   }
   #endif
 
