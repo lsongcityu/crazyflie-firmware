@@ -42,6 +42,11 @@
 // Requires kbuild config ENABLE_AUTO_SHUTDOWN to be activated.
 #define DEFAULT_SYSTEM_SHUTDOWN_TIMEOUT_MIN       5
 
+// IMU alignment: board mounted vertically
+#define IMU_PHI      0.0f
+#define IMU_THETA  -90.0f
+#define IMU_PSI    180.0f
+
 // Default PID gains
 #define PID_ROLL_RATE_KP  250.0
 #define PID_ROLL_RATE_KI  500.0
