@@ -102,7 +102,9 @@ static float norm_tau_omega_limit = 100.0f;
 // static float angle_error_velocity = 300.0f;
 
 static float kd_xy = 10;
+static float kd_xy_temp = 10;
 static float kd_z = 10;
+static float kd_z_temp = 10;
 
 static float tau_x_offset = 0.0f;
 static float tau_y_offset = 0.0f;
@@ -495,7 +497,7 @@ static void stabilizerTask(void* param)
 
   idle_thrust = 1500.0f;
 
-  attitude_control_limit = 1300.0f;
+  attitude_control_limit = 130.0f;
   thrust_flag = true;
   
   float tau_omega_x = 0.0f;
@@ -542,11 +544,15 @@ static void stabilizerTask(void* param)
       {
         kp_xy_temp = 0.0f;
         kp_z_temp = 0.0f;
+        kd_xy_temp = 0.0f;
+        kd_z_temp = 0.0f;
       }
       else
       {
         kp_xy_temp = kp_xy;
         kp_z_temp = kp_z;
+        kd_xy_temp = kd_xy;
+        kd_z_temp = kd_z;
       }
 
       if (timestamp_setpoint == setpoint.timestamp)
@@ -646,9 +652,9 @@ static void stabilizerTask(void* param)
         }
 
         control.thrust = setpoint.thrust;
-        control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy);
-        control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy);
-        control.yaw = -(int16_t)limint16(tau_z * kp_z + (omega_z - sensorData.gyro.z) * kd_z);
+        control.roll = (int16_t)limint16(tau_x * kp_xy_temp + tau_omega_x * kd_xy_temp);
+        control.pitch = -(int16_t)limint16(tau_y * kp_xy_temp + tau_omega_y * kd_xy_temp);
+        control.yaw = -(int16_t)limint16(tau_z * kp_z_temp + (omega_z - sensorData.gyro.z) * kd_z_temp);
 #ifdef FLIP_FCN
         if (fabsf(flip_thrust - setpoint.thrust) < 2.0f)
         {

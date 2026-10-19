@@ -35,7 +35,7 @@
 #include "num.h"
 #include "position_controller.h"
 
-#define MIN_THRUST  1000
+#define MIN_THRUST  100
 #define MAX_THRUST  60000
 
 /**
