@@ -197,6 +197,17 @@ config DECK_GTGPS
     help
         GPS prototype deck, not active nor in production.
 
+config DECK_MG902
+    bool "Support the MicoAir MG-902 GPS (u-blox M9)"
+    default n
+    depends on !DEBUG_PRINT_ON_UART1
+    depends on !DECK_GTGPS
+    help
+        Reads UBX-NAV-PVT from a MicoAir MG-902 GPS module on UART1
+        (115200 baud by default, other common rates are tried
+        automatically). Connect GPS Rx to TX1 and GPS Tx to RX1. The module
+        has no deck memory, so force it with DECK_FORCE="bcMG902".
+
 config DECK_LEDRING
     bool "Support the LED-ring deck"
     default y
