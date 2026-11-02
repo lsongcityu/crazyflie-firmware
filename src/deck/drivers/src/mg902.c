@@ -129,6 +129,11 @@ static const uint32_t baudrates[] = {115200, 230400, 38400, 9600, 460800, 57600}
 #define QMC5883P_LSB_PER_GAUSS  3750.0f
 
 #define QMC_STATUS_DRDY         0x01
+/* 5883L only: a sample was overwritten before it was read. Only reading the
+ * data clears it, and while it is set DRDY can stay 0, so DRDY alone can
+ * stall the driver for good (seen 2026-11-01, status stuck at 0x04).
+ * ArduPilot uses this bit as its data-ready test. */
+#define QMC5883L_STATUS_DOR     0x04
 
 #define MG902_MAG_PERIOD_MS     10
 /* No new sample for this long: the chip dropped back to standby (power glitch
@@ -521,7 +526,7 @@ static bool qmc5883pProbe(void)
 /* Returns true when a new sample was read */
 static bool magRead(void)
 {
-  uint8_t addr, regStatus, regData;
+  uint8_t addr, regStatus, regData, newData;
   uint8_t status = 0;
   uint8_t buf[6];
 
@@ -529,10 +534,12 @@ static bool magRead(void)
     addr = QMC5883L_I2C_ADDR;
     regStatus = QMC5883L_REG_STATUS;
     regData = QMC5883L_REG_DATA;
+    newData = QMC_STATUS_DRDY | QMC5883L_STATUS_DOR;
   } else {
     addr = QMC5883P_I2C_ADDR;
     regStatus = QMC5883P_REG_STATUS;
     regData = QMC5883P_REG_DATA;
+    newData = QMC_STATUS_DRDY;
   }
 
   if (!i2cdevReadByte(I2C1_DEV, addr, regStatus, &status)) {
@@ -540,7 +547,7 @@ static bool magRead(void)
     return false;
   }
   magStatus = status;
-  if (!(status & QMC_STATUS_DRDY)) {
+  if (!(status & newData)) {
     return false;
   }
   if (!i2cdevReadReg8(I2C1_DEV, addr, regData, sizeof(buf), buf)) {
