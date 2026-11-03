@@ -357,6 +357,12 @@ typedef struct
   baro_t baro; // for legacy reasons
 } barometerMeasurement_t;
 
+/** magnetometer measurement, calibrated, body frame (x forward, y left, z up) */
+typedef struct
+{
+  Axis3f mag; // gauss
+} magnetometerMeasurement_t;
+
 
 // Frequencies to be used with the RATE_DO_EXECUTE_HZ macro. Do NOT use an arbitrary number.
 #define RATE_1000_HZ 1000

@@ -123,8 +123,186 @@ bool sensfusion6Test(void)
   return isInit;
 }
 
+
+/* ---------------------------------------------------------------------------
+ * Compass yaw correction (MG-902 deck), simplified from ArduPilot AP_AHRS_DCM
+ * yaw_error_compass() / drift_correction_yaw():
+ *  - the compass is rotated into the world frame and only its horizontal part
+ *    is compared with magnetic north, so the compass only corrects yaw,
+ *  - on an accepted sample the gyro gets an extra rotation rate kp*innov
+ *    about the world vertical, on a rejected sample nothing,
+ *  - after initDelay steps the first good sample sets the yaw directly.
+ * Gates: |mag| in magMin..magMax, field-up angle in angRef +- angTol and
+ * |innovation| < gate. If the innovation gate rejects for longer than gateT
+ * (field gates still passing), it is bypassed so a wrong yaw is pulled back.
+ *
+ * World frame: ENU (x east, y north, z up), yaw counterclockwise from east.
+ * -------------------------------------------------------------------------*/
+#define DEG2RAD (M_PI_F / 180.0f)
+#define RAD2DEG (180.0f / M_PI_F)
+
+enum {
+  MAGYAW_NO_DATA = 0,
+  MAGYAW_ACCEPTED,
+  MAGYAW_REJECT_NORM,      // |mag| outside magMin..magMax
+  MAGYAW_REJECT_ANGLE,     // field-up angle outside angRef +- angTol
+  MAGYAW_REJECT_INNOV,     // |innovation| > gate
+  MAGYAW_ACCEPTED_TIMEOUT, // innovation gate bypassed after gateT
+  MAGYAW_INITIAL,          // initial yaw set from the compass
+  MAGYAW_DISABLED,
+};
+
+// parameters
+static uint8_t magYawEnable = 1;
+static float magDecl = -10.0f;       // deg, east positive (Toronto -10)
+static float magKp = 0.18f;          // 1/s, DCM AHRS_YAW_P 0.2 * 0.9 at hover
+static float magMin = 0.185f;        // gauss
+static float magMax = 0.875f;        // gauss
+static float magAngRef = 157.0f;     // deg, angle between field and world up
+static float magAngTol = 25.0f;      // deg
+static float magGate = 30.0f;        // deg, innovation gate
+static float magGateT = 5.0f;        // s, bypass the innovation gate after this
+static uint16_t magInitDelay = 2050; // sensfusion steps (250 Hz) before the initial yaw
+
+// input
+static float magBx, magBy, magBz;
+static bool magNew = false;
+
+// state
+static bool haveInitialYaw = false;
+static float yawCorr = 0.0f;     // rad/s, correction about world z
+static float magDt = 0.0f;       // s since the last compass sample
+static float innovBadT = 0.0f;   // s of continuous innovation rejection
+static uint32_t ufSteps = 0;
+
+// log
+static float logHeadMag;   // deg, compass heading, clockwise from true north
+static float logHeadEst;   // deg, estimator heading, clockwise from true north
+static float logHeadGyro;  // deg, gyro-only heading from the initial yaw
+static float logInnov;     // deg, compass - estimate
+static float logNorm;      // gauss
+static float logAngle;     // deg, field-up angle
+static float logCorr;      // deg/s, yaw correction
+static uint8_t magYawStatus = MAGYAW_NO_DATA;
+static uint32_t nAccept, nRejNorm, nRejAngle, nRejInnov, nTimeout;
+
+void sensfusion6UpdateMag(float mx, float my, float mz)
+{
+  magBx = mx;
+  magBy = my;
+  magBz = mz;
+  magNew = true;
+}
+
+static float wrap360(float a)
+{
+  while (a >= 360.0f) a -= 360.0f;
+  while (a < 0.0f) a += 360.0f;
+  return a;
+}
+
+// gx, gy, gz in deg/s; returns the yaw correction about world z in rad/s
+static float magYawUpdate(float gx, float gy, float gz, float dt)
+{
+  ufSteps++;
+  magDt += dt;
+
+  // body -> world rotation matrix of the current estimate
+  float r11 = 1.0f - 2.0f * (qy * qy + qz * qz);
+  float r12 = 2.0f * (qx * qy - qw * qz);
+  float r13 = 2.0f * (qx * qz + qw * qy);
+  float r21 = 2.0f * (qx * qy + qw * qz);
+  float r22 = 1.0f - 2.0f * (qx * qx + qz * qz);
+  float r23 = 2.0f * (qy * qz - qw * qx);
+  float r31 = 2.0f * (qx * qz - qw * qy);
+  float r32 = 2.0f * (qy * qz + qw * qx);
+  float r33 = 1.0f - 2.0f * (qx * qx + qy * qy);
+
+  float yawEst = atan2f(r21, r11);
+  logHeadEst = wrap360(90.0f - yawEst * RAD2DEG);
+  // gyro-only heading: world z rate = (third row of R) . gyro
+  logHeadGyro = wrap360(logHeadGyro - (r31 * gx + r32 * gy + r33 * gz) * dt);
+
+  if (!magYawEnable) {
+    magYawStatus = MAGYAW_DISABLED;
+    yawCorr = 0.0f;
+    return 0.0f;
+  }
+  if (!magNew) {
+    return yawCorr;  // hold the last correction until the next sample
+  }
+  magNew = false;
+  float dtm = magDt;
+  magDt = 0.0f;
+  yawCorr = 0.0f;  // stays 0 if this sample is rejected
+
+  // field in the world frame
+  float mwx = r11 * magBx + r12 * magBy + r13 * magBz;
+  float mwy = r21 * magBx + r22 * magBy + r23 * magBz;
+  float mwz = r31 * magBx + r32 * magBy + r33 * magBz;
+  float norm = sqrtf(mwx * mwx + mwy * mwy + mwz * mwz);
+  logNorm = norm;
+  logAngle = (norm > 0.0f) ? acosf(mwz / norm) * RAD2DEG : 0.0f;
+
+  // innovation: angle from the measured horizontal field to magnetic north,
+  // magnetic north in ENU = (sin decl, cos decl)
+  float nx = sinf(magDecl * DEG2RAD);
+  float ny = cosf(magDecl * DEG2RAD);
+  float innov = atan2f(mwx * ny - mwy * nx, mwx * nx + mwy * ny);
+  logInnov = innov * RAD2DEG;
+  logHeadMag = wrap360(90.0f - (yawEst + innov) * RAD2DEG);
+
+  if (norm < magMin || norm > magMax) {
+    magYawStatus = MAGYAW_REJECT_NORM;
+    nRejNorm++;
+    return 0.0f;
+  }
+  if (fabsf(logAngle - magAngRef) > magAngTol) {
+    magYawStatus = MAGYAW_REJECT_ANGLE;
+    nRejAngle++;
+    return 0.0f;
+  }
+
+  if (!haveInitialYaw) {
+    if (ufSteps < magInitDelay) {
+      return 0.0f;  // let roll and pitch settle first
+    }
+    applyquat(cosf(0.5f * innov), 0.0f, 0.0f, sinf(0.5f * innov));
+    haveInitialYaw = true;
+    logHeadGyro = logHeadMag;
+    magYawStatus = MAGYAW_INITIAL;
+    return 0.0f;
+  }
+
+  if (fabsf(logInnov) > magGate) {
+    innovBadT += dtm;
+    if (innovBadT < magGateT) {
+      magYawStatus = MAGYAW_REJECT_INNOV;
+      nRejInnov++;
+      return 0.0f;
+    }
+    magYawStatus = MAGYAW_ACCEPTED_TIMEOUT;
+    nTimeout++;
+  } else {
+    innovBadT = 0.0f;
+    magYawStatus = MAGYAW_ACCEPTED;
+    nAccept++;
+  }
+
+  yawCorr = magKp * innov;
+  return yawCorr;
+}
+
 void sensfusion6UpdateQ(float gx, float gy, float gz, float ax, float ay, float az, float dt)
 {
+  // compass yaw correction as a rotation rate about the world vertical,
+  // added to the gyro in the body frame: w_b += corr * (R^T e_z)
+  float corr = magYawUpdate(gx, gy, gz, dt) * RAD2DEG;  // deg/s
+  logCorr = corr;
+  gx += corr * 2.0f * (qx * qz - qw * qy);
+  gy += corr * 2.0f * (qy * qz + qw * qx);
+  gz += corr * (1.0f - 2.0f * (qx * qx + qy * qy));
+
   sensfusion6UpdateQImpl(gx, gy, gz, ax, ay, az, dt);
   estimatedGravityDirection(&gravX, &gravY, &gravZ);
 
@@ -425,3 +603,37 @@ PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, ki, &twoKi)
 PARAM_ADD(PARAM_FLOAT, baseZacc, &baseZacc)
 PARAM_ADD(PARAM_UINT8, gc, &gravity_correction)
 PARAM_GROUP_STOP(sensfusion6)
+
+/**
+ * Compass yaw correction (ArduPilot DCM style), see magYawUpdate().
+ * World frame ENU, headings clockwise from true north.
+ */
+PARAM_GROUP_START(magYaw)
+PARAM_ADD(PARAM_UINT8 | PARAM_PERSISTENT, enable, &magYawEnable)
+PARAM_ADD(PARAM_FLOAT | PARAM_PERSISTENT, decl, &magDecl)
+PARAM_ADD(PARAM_FLOAT | PARAM_PERSISTENT, kp, &magKp)
+PARAM_ADD(PARAM_FLOAT | PARAM_PERSISTENT, magMin, &magMin)
+PARAM_ADD(PARAM_FLOAT | PARAM_PERSISTENT, magMax, &magMax)
+PARAM_ADD(PARAM_FLOAT | PARAM_PERSISTENT, angRef, &magAngRef)
+PARAM_ADD(PARAM_FLOAT | PARAM_PERSISTENT, angTol, &magAngTol)
+PARAM_ADD(PARAM_FLOAT | PARAM_PERSISTENT, gate, &magGate)
+PARAM_ADD(PARAM_FLOAT | PARAM_PERSISTENT, gateT, &magGateT)
+PARAM_ADD(PARAM_UINT16 | PARAM_PERSISTENT, initDelay, &magInitDelay)
+PARAM_GROUP_STOP(magYaw)
+
+LOG_GROUP_START(magYaw)
+LOG_ADD(LOG_FLOAT, headMag, &logHeadMag)
+LOG_ADD(LOG_FLOAT, headEst, &logHeadEst)
+LOG_ADD(LOG_FLOAT, headGyro, &logHeadGyro)
+LOG_ADD(LOG_FLOAT, innov, &logInnov)
+LOG_ADD(LOG_FLOAT, norm, &logNorm)
+LOG_ADD(LOG_FLOAT, angle, &logAngle)
+LOG_ADD(LOG_FLOAT, corr, &logCorr)
+LOG_ADD(LOG_UINT8, status, &magYawStatus)
+LOG_ADD(LOG_UINT8, init, &haveInitialYaw)
+LOG_ADD(LOG_UINT32, nAccept, &nAccept)
+LOG_ADD(LOG_UINT32, nRejNorm, &nRejNorm)
+LOG_ADD(LOG_UINT32, nRejAngle, &nRejAngle)
+LOG_ADD(LOG_UINT32, nRejInnov, &nRejInnov)
+LOG_ADD(LOG_UINT32, nTimeout, &nTimeout)
+LOG_GROUP_STOP(magYaw)

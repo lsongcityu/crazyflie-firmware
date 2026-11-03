@@ -79,6 +79,9 @@ void estimatorComplementary(state_t *state, const stabilizerStep_t stabilizerSte
     case MeasurementTypeBarometer:
       baro = m.data.barometer.baro;
       break;
+    case MeasurementTypeMagnetometer:
+      sensfusion6UpdateMag(m.data.magnetometer.mag.x, m.data.magnetometer.mag.y, m.data.magnetometer.mag.z);
+      break;
     case MeasurementTypeTOF:
       tof = m.data.tof;
       break;

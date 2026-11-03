@@ -57,6 +57,7 @@
 #include "log.h"
 #include "uart1.h"
 #include "i2cdev.h"
+#include "estimator.h"
 
 /* Tried in order: MicoAir default, ArduPilot-saved, u-blox M9 factory
  * default, older u-blox default, ArduPilot moving baseline, other */
@@ -605,6 +606,9 @@ static bool magRead(void)
       magX =  c[0]; magY =  c[1]; break;
   }
   magZ = c[2];
+
+  magnetometerMeasurement_t meas = {.mag = {.x = magX, .y = magY, .z = magZ}};
+  estimatorEnqueueMagnetometer(&meas);
 
   magCount++;
   return true;

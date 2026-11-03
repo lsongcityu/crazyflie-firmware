@@ -56,6 +56,7 @@ typedef enum {
   MeasurementTypeGyroscope,
   MeasurementTypeAcceleration,
   MeasurementTypeBarometer,
+  MeasurementTypeMagnetometer,
 } MeasurementType;
 
 typedef struct
@@ -75,6 +76,7 @@ typedef struct
     gyroscopeMeasurement_t gyroscope;
     accelerationMeasurement_t acceleration;
     barometerMeasurement_t barometer;
+    magnetometerMeasurement_t magnetometer;
   } data;
 } measurement_t;
 
@@ -158,6 +160,14 @@ static inline void estimatorEnqueueSweepAngles(const sweepAngleMeasurement_t *sw
   measurement_t m;
   m.type = MeasurementTypeSweepAngle;
   m.data.sweepAngle = *sweepAngle;
+  estimatorEnqueue(&m);
+}
+
+static inline void estimatorEnqueueMagnetometer(const magnetometerMeasurement_t *magnetometer)
+{
+  measurement_t m;
+  m.type = MeasurementTypeMagnetometer;
+  m.data.magnetometer = *magnetometer;
   estimatorEnqueue(&m);
 }
 
