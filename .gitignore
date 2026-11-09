@@ -41,6 +41,7 @@ docs/api
 build/
 # To avoid that /tools/build is ignored
 !/tools/*
+.DS_Store
 
 **/*.o
 **/*.cmd
