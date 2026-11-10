@@ -56,6 +56,34 @@
 #include "sensors_bmi088_common.h"
 #include "platform_defaults.h"
 
+#include "app_channel.h"
+
+// ---------------------------------------------------------------------------
+// IMU appchannel streaming (custom): emit each IMU sample over the CRTP
+// appchannel directly from the sensor task, so the packet carries the exact
+// data-ready interrupt timestamp and is sent at the sensor-task priority (4),
+// not the low app-task priority. Host side: ROS 2 `imu_driver` package.
+// Set IMU_APPCHANNEL_STREAM to 0 to disable.
+// ---------------------------------------------------------------------------
+#define IMU_APPCHANNEL_STREAM   1
+#define IMU_APPCHANNEL_STAMP    0xA9  // marker byte (must match the ROS 2 driver)
+#define IMU_APPCHANNEL_HEADER   0x0D  // marker byte (must match the ROS 2 driver)
+
+#if IMU_APPCHANNEL_STREAM
+// 30-byte packet == APPCHANNEL_MTU. Host decodes with struct "<IBB6f".
+struct imuAppPacket {
+  uint32_t t_us;    // CF data-ready interrupt timestamp [us] (truncated to 32 bits)
+  uint8_t stamp;    // marker == IMU_APPCHANNEL_STAMP
+  uint8_t header;   // marker == IMU_APPCHANNEL_HEADER
+  float acc_x;      // Gs
+  float acc_y;      // Gs
+  float acc_z;      // Gs
+  float gyro_x;     // deg/s
+  float gyro_y;     // deg/s
+  float gyro_z;     // deg/s
+} __attribute__((packed));
+#endif
+
 #define GYRO_ADD_RAW_AND_VARIANCE_LOG_VALUES
 
 #define SENSORS_READ_RATE_HZ            1000
@@ -366,7 +394,25 @@ static void sensorsTask(void *param)
     {
       xQueueOverwrite(barometerDataQueue, &sensorData.baro);
     }
-
+#if IMU_APPCHANNEL_STREAM
+    // Stream this IMU sample over the appchannel with its exact interrupt
+    // timestamp. Non-blocking: drops the packet if the CRTP TX queue is full
+    // (e.g. host not connected / link saturated), which keeps the sensor task
+    // real-time. Dropped samples appear as gaps in the host timestamp sequence.
+    {
+      struct imuAppPacket imuPkt;
+      imuPkt.t_us = (uint32_t)sensorData.interruptTimestamp;
+      imuPkt.stamp = IMU_APPCHANNEL_STAMP;
+      imuPkt.header = IMU_APPCHANNEL_HEADER;
+      imuPkt.acc_x = sensorData.acc.x;
+      imuPkt.acc_y = sensorData.acc.y;
+      imuPkt.acc_z = sensorData.acc.z;
+      imuPkt.gyro_x = sensorData.gyro.x;
+      imuPkt.gyro_y = sensorData.gyro.y;
+      imuPkt.gyro_z = sensorData.gyro.z;
+      appchannelSendDataPacket(&imuPkt, sizeof(imuPkt));
+    }
+#endif
     xSemaphoreGive(dataReady);
   }
 }

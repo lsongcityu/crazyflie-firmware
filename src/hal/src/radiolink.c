@@ -162,9 +162,19 @@ void radiolinkSyslinkDispatch(SyslinkPacket *slp)
   if (slp->type == SYSLINK_RADIO_RAW)
   {
     slp->length--; // Decrease to get CRTP size.
-    // Assert that we are not dropping any packets
-    ASSERT(xQueueSend(crtpPacketDelivery, &slp->length, 0) == pdPASS);
-    ++count_rx_unicast;
+    // // Assert that we are not dropping any packets
+    // ASSERT(xQueueSend(crtpPacketDelivery, &slp->length, 0) == pdPASS);
+    // ++count_rx_unicast;
+
+    // Best-effort delivery instead of ASSERT. When the active CRTP link is USB,
+    // nobody drains this radio RX queue, so stray unicast radio packets from the
+    // ambient 2.4 GHz environment would otherwise fill the (depth-5) queue and
+    // trip an ASSERT here, rebooting the CF mid-run. Dropping an unhandled radio
+    // packet is harmless (same policy as the broadcast branch below).
+    if (xQueueSend(crtpPacketDelivery, &slp->length, 0) == pdPASS) {
+      ++count_rx_unicast;
+    }
+    
     ledseqRun(&seq_linkUp);
     // If a radio packet is received, one can be sent
     if (xQueueReceive(txQueue, &txPacket, 0) == pdTRUE)

@@ -52,9 +52,25 @@ void usecTimerInit(void)
 
   //Timer configuration
   TIM_TimeBaseStructure.TIM_Period = 0xFFFF;
+  // Derive the prescaler from the *actual* APB1 timer clock read from the RCC
+  // registers rather than from the SystemCoreClock global. On some platforms
+  // (e.g. Crazyflie Bolt) that global does not reflect the real core clock when
+  // this runs, which made TIM7 tick several times too fast and corrupted every
+  // usecTimestamp()/interruptTimestamp. RCC_GetClocksFreq() reads the live clock
+  // tree configuration, so the 1 MHz tick is correct on every platform.
+  RCC_ClocksTypeDef rccClocks;
+  RCC_GetClocksFreq(&rccClocks);
+  uint32_t apb1TimerClock = rccClocks.PCLK1_Frequency;
+  // STM32F4: the APB1 timer input clock is doubled whenever the APB1 (PPRE1)
+  // prescaler is not /1.
+  if ((RCC->CFGR & RCC_CFGR_PPRE1) != 0) {
+    apb1TimerClock *= 2;
+  }
+  // Target a 1 MHz (1 us) tick:  CK_CNT = timerClock / (PSC + 1)
+  TIM_TimeBaseStructure.TIM_Prescaler = (uint16_t)((apb1TimerClock / 1000000U) - 1U);
   // APB1 clock is /4, but APB clock inputs to timers are doubled when
   // the APB clock runs slower than /1, so APB1 timers see a /2 clock
-  TIM_TimeBaseStructure.TIM_Prescaler = SystemCoreClock / (1000 * 1000) / 2;
+  // TIM_TimeBaseStructure.TIM_Prescaler = SystemCoreClock / (1000 * 1000) / 2;
   TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
   TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
