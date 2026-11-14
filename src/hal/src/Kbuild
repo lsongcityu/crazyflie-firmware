@@ -1,6 +1,8 @@
 obj-y += amg8833.o
 obj-y += buzzer.o
 obj-y += freeRTOSdebug.o
+obj-$(CONFIG_IMU_UART_STREAM) += imu_uart_proto.o
+obj-$(CONFIG_IMU_UART_STREAM) += imu_uart_stream.o
 obj-y += ledseq.o
 obj-y += ow_common.o
 obj-y += ow_syslink.o

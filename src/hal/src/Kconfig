@@ -44,3 +44,24 @@ config CPX_UART2_BAUDRATE
       Set the baudrate that will be used for CPX on UART2
 
 endmenu
+
+menu "IMU UART stream"
+
+config IMU_UART_STREAM
+    bool "Stream the IMU at 1 kHz on UART2 with PPS and GPRMC time sync"
+    depends on SENSORS_BMI088_BMP3XX
+    depends on !DEBUG_PRINT_ON_UART1
+    depends on !MOTORS_ESC_PROTOCOL_DSHOT
+    default n
+    help
+        Sends every IMU sample, before low pass filtering, as a binary frame
+        on TX2 (PA2) at 1 Mbaud. Also outputs a hardware timed pulse per
+        second on RX2 (PA3) and a matching GPRMC sentence on TX1 (PC10) at
+        9600 baud, which a Livox lidar can use to lock its clock to the time
+        base of the IMU timestamps.
+
+        Takes over UART1, UART2, TIM5 and DMA1 stream 6, so it can not be
+        combined with decks or features that use them (AI deck, CPX on
+        UART2, debug print on UART1, DShot).
+
+endmenu

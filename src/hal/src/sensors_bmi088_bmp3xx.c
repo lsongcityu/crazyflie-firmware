@@ -57,6 +57,7 @@
 #include "platform_defaults.h"
 
 #include "app_channel.h"
+#include "imu_uart_stream.h"
 
 // ---------------------------------------------------------------------------
 // IMU appchannel streaming (custom): emit each IMU sample over the CRTP
@@ -64,8 +65,14 @@
 // data-ready interrupt timestamp and is sent at the sensor-task priority (4),
 // not the low app-task priority. Host side: ROS 2 `imu_driver` package.
 // Set IMU_APPCHANNEL_STREAM to 0 to disable.
+// It is off when the UART stream (CONFIG_IMU_UART_STREAM) carries the IMU data,
+// so that the 1 kHz packets do not also load the CRTP link.
 // ---------------------------------------------------------------------------
+#ifdef CONFIG_IMU_UART_STREAM
+#define IMU_APPCHANNEL_STREAM   0
+#else
 #define IMU_APPCHANNEL_STREAM   1
+#endif
 #define IMU_APPCHANNEL_STAMP    0xA9  // marker byte (must match the ROS 2 driver)
 #define IMU_APPCHANNEL_HEADER   0x0D  // marker byte (must match the ROS 2 driver)
 
@@ -319,6 +326,10 @@ static void sensorsTask(void *param)
   Axis3f gyroScaledIMU;
   Axis3f accScaledIMU;
   Axis3f accScaled;
+#ifdef CONFIG_IMU_UART_STREAM
+  Axis3f gyroUnfiltered;
+  Axis3f accUnfiltered;
+#endif
   measurement_t measurement;
   /* wait an additional second the keep bus free
    * this is only required by the z-ranger, since the
@@ -350,6 +361,9 @@ static void sensorsTask(void *param)
       gyroScaledIMU.y =  (gyroRaw.y - gyroBias.y) * SENSORS_BMI088_DEG_PER_LSB_CFG;
       gyroScaledIMU.z =  (gyroRaw.z - gyroBias.z) * SENSORS_BMI088_DEG_PER_LSB_CFG;
       sensorsAlignToAirframe(&gyroScaledIMU, &sensorData.gyro);
+#ifdef CONFIG_IMU_UART_STREAM
+      gyroUnfiltered = sensorData.gyro;
+#endif
       applyAxis3fLpf((lpf2pData*)(&gyroLpf), &sensorData.gyro);
 
       measurement.type = MeasurementTypeGyroscope;
@@ -362,11 +376,20 @@ static void sensorsTask(void *param)
       accScaledIMU.z = accelRaw.z * SENSORS_BMI088_G_PER_LSB_CFG / accScale;
       sensorsAlignToAirframe(&accScaledIMU, &accScaled);
       sensorsAccAlignToGravity(&accScaled, &sensorData.acc);
+#ifdef CONFIG_IMU_UART_STREAM
+      accUnfiltered = sensorData.acc;
+#endif
       applyAxis3fLpf((lpf2pData*)(&accLpf), &sensorData.acc);
 
       measurement.type = MeasurementTypeAcceleration;
       measurement.data.acceleration.acc = sensorData.acc;
       estimatorEnqueue(&measurement);
+
+#ifdef CONFIG_IMU_UART_STREAM
+      // Sent before the slower barometer read, with the values from before the
+      // low pass filters so that impacts are not smeared out
+      imuUartStreamSend(sensorData.interruptTimestamp, &accUnfiltered, &gyroUnfiltered, gyroBiasFound);
+#endif
     }
 
     if (isBarometerPresent)
@@ -637,6 +660,9 @@ static void sensorsBmi088Bmp3xxInit(void)
   sensorsBiasObjInit(&gyroBiasRunning);
   sensorsDeviceInit();
   sensorsInterruptInit();
+#ifdef CONFIG_IMU_UART_STREAM
+  imuUartStreamInit();
+#endif
   sensorsTaskInit();
 }
 
