@@ -1,0 +1,7 @@
+CONFIG_PLATFORM_BOLT=y
+
+CONFIG_ESTIMATOR_AUTO_SELECT=y
+CONFIG_CONTROLLER_AUTO_SELECT=y
+
+# Bolt with a DShot ESC (bidirectional DShot RPM telemetry is on by default).
+CONFIG_MOTORS_ESC_PROTOCOL_DSHOT=y

@@ -55,7 +55,14 @@
 #include "param.h"
 
 static uint8_t motorSetEnable = 0;
+#ifdef CONFIG_MOTORS_REVERSIBLE
+// [hopping] Reversible build: the override uses the thrust setpoint convention
+// without its minimum spin (below 1000 or 32750 = stop, above = forward,
+// below = reverse), so the default 32750 keeps the motors stopped
+static uint16_t motorPowerSet[] = {32750, 32750, 32750, 32750};
+#else
 static uint16_t motorPowerSet[] = {0, 0, 0, 0}; // user-requested PWM signals (overrides)
+#endif
 static uint16_t motor_ratios[] = {0, 0, 0, 0};  // actual PWM signals
 static uint16_t timPolarity;
 
@@ -266,6 +273,9 @@ void motorsInit(const MotorPerifDef** motorMapSelect)
   DEBUG_PRINT("Using %s motor driver: %s\n", 
     motorMap[0]->drvType == BRUSHED ? "brushed" : "brushless", 
     motorMap[0]->drvType == BRUSHED ? "PWM" : MOTORS_PROTOCOL_STRING);
+#ifdef CONFIG_MOTORS_REVERSIBLE
+  DEBUG_PRINT("Reversible motors: the ESC is set to DSHOT 3D mode\n"); // [hopping]
+#endif
 
   if (motorMap[MOTOR_M1]->hasPC15ESCReset)
   {
@@ -621,6 +631,71 @@ uint16_t motorsGetRPM(uint32_t motorId) {
 }
 #endif
 
+#ifdef CONFIG_MOTORS_REVERSIBLE
+// [hopping] Reversible motors (DSHOT 3D mode). Local addition, not in upstream.
+//
+// The ESC is told to use 3D mode with a DSHOT command. Commands can only be
+// sent in place of "motor stop", so while a motor is stopped a short burst of
+// "3D mode on" is sent at regular intervals. The ESC keeps this until power
+// off; it is only stored permanently when the save command is sent.
+#define DSHOT_CMD_3D_MODE_OFF     9
+#define DSHOT_CMD_3D_MODE_ON      10
+#define DSHOT_CMD_SAVE_SETTINGS   12
+#define DSHOT_3D_BURST_PERIOD     256  // stop frames (1 per ms) between two bursts
+#define DSHOT_3D_BURST_LENGTH     32   // frames per burst, the ESC needs at least 7 in a row
+#define DSHOT_3D_SAVE_MODE_FRAMES 50   // frames of "3D on/off" before saving
+#define DSHOT_3D_SAVE_FRAMES      20   // frames of "save settings"
+
+// motorPowerSet.esc3dSave: 1 = store "3D on" in the ESC, 2 = store "3D off" in
+// the ESC and stop sending "3D on" until reboot. Goes back to 0 when done.
+static uint8_t esc3dSave = 0;
+static bool esc3dAutoDisabled = false;
+static const uint8_t reversibleBuild = 1;
+static uint16_t esc3dStopFrames[NBR_OF_MOTORS];
+static uint16_t esc3dSaveFrames[NBR_OF_MOTORS];
+
+// Returns the DSHOT command to send to motor 'id' instead of "motor stop", or 0.
+static uint16_t motorsDshot3dStopCommand(uint32_t id)
+{
+  if (esc3dSave == 1 || esc3dSave == 2)
+  {
+    const uint16_t frame = esc3dSaveFrames[id];
+    if (frame < DSHOT_3D_SAVE_MODE_FRAMES + DSHOT_3D_SAVE_FRAMES)
+    {
+      esc3dSaveFrames[id]++;
+      if (frame >= DSHOT_3D_SAVE_MODE_FRAMES)
+      {
+        return DSHOT_CMD_SAVE_SETTINGS;
+      }
+      return (esc3dSave == 1) ? DSHOT_CMD_3D_MODE_ON : DSHOT_CMD_3D_MODE_OFF;
+    }
+
+    for (int i = 0; i < NBR_OF_MOTORS; i++)
+    {
+      if (esc3dSaveFrames[i] < DSHOT_3D_SAVE_MODE_FRAMES + DSHOT_3D_SAVE_FRAMES)
+      {
+        return 0; // wait for the other motors
+      }
+    }
+    esc3dAutoDisabled = (esc3dSave == 2);
+    esc3dSave = 0;
+    for (int i = 0; i < NBR_OF_MOTORS; i++)
+    {
+      esc3dSaveFrames[i] = 0;
+    }
+    return 0;
+  }
+
+  if (esc3dAutoDisabled)
+  {
+    return 0;
+  }
+
+  esc3dStopFrames[id]++;
+  return ((esc3dStopFrames[id] % DSHOT_3D_BURST_PERIOD) < DSHOT_3D_BURST_LENGTH) ? DSHOT_CMD_3D_MODE_ON : 0;
+}
+#endif // CONFIG_MOTORS_REVERSIBLE
+
 static void motorsPrepareDshot(uint32_t id, uint16_t ratio)
 {
   uint16_t dshotBits;
@@ -644,6 +719,16 @@ static void motorsPrepareDshot(uint32_t id, uint16_t ratio)
   {
     dshotRatio = 0;
   }
+
+#ifdef CONFIG_MOTORS_REVERSIBLE
+  // [hopping] Send ESC mode commands in place of "motor stop". The ESC only
+  // accepts a command when the telemetry bit of the frame is set.
+  if (dshotRatio == 0)
+  {
+    dshotRatio = motorsDshot3dStopCommand(id);
+    dshot_telemetry = (dshotRatio != 0);
+  }
+#endif
 
   dshotBits = (dshotRatio << 1) | (dshot_telemetry ? 1 : 0);
 
@@ -739,6 +824,14 @@ void motorsSetRatio(uint32_t id, uint16_t ithrust)
     {
       ratio = motorPowerSet[id];
     }
+
+#ifdef CONFIG_MOTORS_REVERSIBLE
+    // [hopping] The override values use the reversible thrust convention
+    if (motorSetEnable == 1 || motorSetEnable == 2)
+    {
+      ratio = powerDistributionReversibleRatio(ratio);
+    }
+#endif
 
     motor_ratios[id] = ratio;
 
@@ -1051,6 +1144,18 @@ PARAM_GROUP_START(motorPowerSet)
  * @brief Nonzero to override controller with set values
  */
 PARAM_ADD_CORE(PARAM_UINT8, enable, &motorSetEnable)
+
+#if defined(CONFIG_MOTORS_ESC_PROTOCOL_DSHOT) && defined(CONFIG_MOTORS_REVERSIBLE)
+/**
+ * @brief [hopping] Reversible build only: always 1, shows that this firmware uses DSHOT 3D mode
+ */
+PARAM_ADD(PARAM_UINT8 | PARAM_RONLY, reversible, &reversibleBuild)
+/**
+ * @brief [hopping] Reversible build only: with the motors stopped, 1 stores
+ * "3D mode on" permanently in the ESC, 2 stores "3D mode off". Returns to 0 when done.
+ */
+PARAM_ADD(PARAM_UINT8, esc3dSave, &esc3dSave)
+#endif
 
 /**
  * @brief motor power for m1: `0 - UINT16_MAX`

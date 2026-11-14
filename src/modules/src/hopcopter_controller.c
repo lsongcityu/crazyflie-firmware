@@ -161,6 +161,28 @@ s_idx_1 = s_idx_0 * c_idx_1;
 void hopcopterControllerInit(hopcopterController_t *context) {
   *context = (hopcopterController_t)HOPCOPTER_CONTROLLER_INITIALIZER;
 }
+#ifdef CONFIG_MOTORS_REVERSIBLE
+// [hopping] Reversible motors (DSHOT 3D mode): decode the thrust setpoint.
+//   0     = motors stopped (handled by the caller)
+//   32750 = zero thrust, motors turn forward at minimum speed
+//   above = forward, below = reverse, growing with the distance from 32750
+// The result is signed, in the same units as the one-direction build (65535 =
+// full throttle), so the attitude gains keep their meaning.
+#include "power_distribution.h"
+
+static float reversibleThrust(const hopcopterController_t *context, float setpointThrust)
+{
+  // The value that switches the attitude P gains off keeps its meaning: it is
+  // a small forward thrust, exactly as in the one-direction build.
+  if (fabsf(setpointThrust - context->attitude_control_limit) < 10.0f)
+  {
+    return setpointThrust;
+  }
+
+  return powerDistributionReversibleThrust(setpointThrust);
+}
+#endif
+
 void hopcopterControllerStep(hopcopterController_t *context, control_t *control,
   const setpoint_t *setpoint, const sensorData_t *sensorData, const state_t *state) {
   float tau_omega_x = 0.0f, tau_omega_y = 0.0f, norm_tau_omega = 0.0f;
@@ -272,7 +294,11 @@ void hopcopterControllerStep(hopcopterController_t *context, control_t *control,
             tau_omega_y = tau_omega_y / norm_tau_omega * context->norm_tau_omega_limit;
           }
 
+#ifdef CONFIG_MOTORS_REVERSIBLE
+          control->thrust = reversibleThrust(context, setpoint->thrust);
+#else
           control->thrust = setpoint->thrust;
+#endif
           control->roll = (int16_t)limint16(context->tau_x * context->kp_xy_temp + tau_omega_x * context->kd_xy);
           control->pitch = -(int16_t)limint16(context->tau_y * context->kp_xy_temp + tau_omega_y * context->kd_xy);
           control->yaw = -(int16_t)limint16(context->tau_z * context->kp_z + (context->omega_z - sensorData->gyro.z) * context->kd_z);

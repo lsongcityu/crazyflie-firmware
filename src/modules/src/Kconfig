@@ -164,6 +164,17 @@ config MOTORS_NBR_OF_POLES
     help
         This is used for RPM calculation and requires bi-directional DSHOT.
 
+config MOTORS_REVERSIBLE
+  bool "Reversible motors (DSHOT 3D mode)"
+  depends on MOTORS_ESC_PROTOCOL_DSHOT
+  default n
+    help
+        Lets the motors spin in both directions for reverse thrust. The ESC
+        is switched to 3D mode with a DSHOT command while the motors are
+        stopped (tested with Bluejay). The legacy thrust setpoint changes
+        meaning: 0 = stop, 32750 = zero thrust, above = forward, below =
+        reverse. Leave this off for a normal one-direction build.
+
 config MOTORS_REQUIRE_ARMING
     bool "Require arming to be able to start motors and take off"
     default n
