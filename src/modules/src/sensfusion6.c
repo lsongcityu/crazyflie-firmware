@@ -95,9 +95,14 @@ quaternion_multiply(
 static float gravX, gravY, gravZ; // Unit vector in the estimated gravity direction
 
 // The acc in Z for static position (g)
-// Set on first update, assuming we are in a static position since the sensors were just calibrates.
-// This value will be better the more level the copter is at calibration time
+// Mean of |acc| over the first BASE_ZACC_SAMPLES updates (1 s at 250 Hz), the
+// robot must be still then. |acc| does not depend on the orientation, so this
+// also works when the robot starts on its side or nose up (Bitcraze used the
+// first sample of acc along the estimated gravity, which assumes a level start
+// because the attitude still starts at level)
+#define BASE_ZACC_SAMPLES 250
 static float baseZacc = 1.0;
+static uint16_t baseZaccCount = 0;
 
 static bool isInit;
 
@@ -223,11 +228,6 @@ static float magYawUpdate(float gx, float gy, float gz, float dt)
   // gyro-only heading: world z rate = (third row of R) . gyro
   logHeadGyro = wrap360(logHeadGyro - (r31 * gx + r32 * gy + r33 * gz) * dt);
 
-  if (!magYawEnable) {
-    magYawStatus = MAGYAW_DISABLED;
-    yawCorr = 0.0f;
-    return 0.0f;
-  }
   if (!magNew) {
     return yawCorr;  // hold the last correction until the next sample
   }
@@ -251,6 +251,12 @@ static float magYawUpdate(float gx, float gy, float gz, float dt)
   float innov = atan2f(mwx * ny - mwy * nx, mwx * nx + mwy * ny);
   logInnov = innov * RAD2DEG;
   logHeadMag = wrap360(90.0f - (yawEst + innov) * RAD2DEG);
+
+  // disabled: compass heading and innovation are still logged, no correction
+  if (!magYawEnable) {
+    magYawStatus = MAGYAW_DISABLED;
+    return 0.0f;
+  }
 
   if (norm < magMin || norm > magMax) {
     magYawStatus = MAGYAW_REJECT_NORM;
@@ -307,8 +313,9 @@ void sensfusion6UpdateQ(float gx, float gy, float gz, float ax, float ay, float 
   estimatedGravityDirection(&gravX, &gravY, &gravZ);
 
   if (!isCalibrated) {
-    baseZacc = sensfusion6GetAccZ(ax, ay, az);
-    isCalibrated = true;
+    baseZaccCount++;
+    baseZacc += (sqrtf(ax * ax + ay * ay + az * az) - baseZacc) / baseZaccCount;
+    isCalibrated = (baseZaccCount >= BASE_ZACC_SAMPLES);
   }
 }
 
