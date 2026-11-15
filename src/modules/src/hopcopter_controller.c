@@ -27,6 +27,7 @@
  * kp_z_temp is intentionally retained although the baseline yaw law uses kp_z.
  */
 #include <math.h>
+#include "autoconf.h"
 #include "hopcopter_controller.h"
 static float limint16(float in)
 {
