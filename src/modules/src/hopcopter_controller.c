@@ -167,8 +167,8 @@ void hopcopterControllerInit(hopcopterController_t *context) {
 //   0     = motors stopped (handled by the caller)
 //   32750 = zero thrust, motors turn forward at minimum speed
 //   above = forward, below = reverse, growing with the distance from 32750
-// The result is signed, in the same units as the one-direction build (65535 =
-// full throttle), so the attitude gains keep their meaning.
+// The result is the signed distance from 32750, as in the bidirectional_hopping
+// branch. The mixer adds the minimum spin and the attitude corrections to it.
 #include "power_distribution.h"
 
 static float reversibleThrust(const hopcopterController_t *context, float setpointThrust)

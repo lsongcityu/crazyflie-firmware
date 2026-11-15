@@ -87,8 +87,8 @@ float powerDistributionGetMaxThrust();
  * are limited to the same size (60000 on the forward side, 5500 on the reverse side).
  *
  * @param setpointThrust Thrust in the reversible convention. Must not be the "stop" value 0.
- * @return Signed thrust, positive = forward, in the units of the one-direction
- *         build (65535 = full throttle). Never 0.
+ * @return Signed distance from 32750, positive = forward (32750 would be the
+ *         full range of one direction). Never 0.
  */
 float powerDistributionReversibleThrust(float setpointThrust);
 
