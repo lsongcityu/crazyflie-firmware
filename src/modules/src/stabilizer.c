@@ -311,7 +311,6 @@ static void stabilizerTask(void* param)
   // Initialize stabilizerStep to something else than 0
   stabilizerStep = 1;
 
-  systemWaitStart();
   DEBUG_PRINT("Starting stabilizer loop\n");
   rateSupervisorInit(&rateSupervisorContext, xTaskGetTickCount(), M2T(1000), 997, 1003, 1);
   xRateSupervisorSemaphore = xSemaphoreCreateBinary();
@@ -320,6 +319,11 @@ static void stabilizerTask(void* param)
   // Preserve the original task-start defaults without overwriting loaded gains.
   hopcopter.idle_thrust = 1500.0f;
   hopcopter.attitude_control_limit = 1300.0f;
+
+  motorsResetESCs();
+  // Sync to the first sensor data ready interrupt to ensure correct timing from the start of the loop
+  sensorsWaitDataReady(); 
+
   while(1) {
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
@@ -366,6 +370,9 @@ static void stabilizerTask(void* param)
       //   motorsStop();
       // }
       controlMotors(&control);
+#ifdef CONFIG_MOTORS_ESC_PROTOCOL_DSHOT
+      motorsBurstDshot();
+#endif
       // servoSetAngle(0.9f*UINT8_MAX);
       // servoSetAngle2(0.9f*UINT8_MAX);
 
@@ -387,10 +394,6 @@ static void stabilizerTask(void* param)
     }
 
     xSemaphoreGive(xRateSupervisorSemaphore);
-
-#ifdef CONFIG_MOTORS_ESC_PROTOCOL_DSHOT
-    motorsBurstDshot();
-#endif
   }
 }
 
