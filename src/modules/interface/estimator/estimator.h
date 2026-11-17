@@ -57,6 +57,7 @@ typedef enum {
   MeasurementTypeAcceleration,
   MeasurementTypeBarometer,
   MeasurementTypeMagnetometer,
+  MeasurementTypeGps,
 } MeasurementType;
 
 typedef struct
@@ -77,6 +78,7 @@ typedef struct
     accelerationMeasurement_t acceleration;
     barometerMeasurement_t barometer;
     magnetometerMeasurement_t magnetometer;
+    gpsMeasurement_t gps;
   } data;
 } measurement_t;
 
@@ -168,6 +170,14 @@ static inline void estimatorEnqueueMagnetometer(const magnetometerMeasurement_t 
   measurement_t m;
   m.type = MeasurementTypeMagnetometer;
   m.data.magnetometer = *magnetometer;
+  estimatorEnqueue(&m);
+}
+
+static inline void estimatorEnqueueGps(const gpsMeasurement_t *gps)
+{
+  measurement_t m;
+  m.type = MeasurementTypeGps;
+  m.data.gps = *gps;
   estimatorEnqueue(&m);
 }
 

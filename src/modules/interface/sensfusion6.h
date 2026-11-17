@@ -35,6 +35,7 @@ void sensfusion6Init(void);
 bool sensfusion6Test(void);
 
 void sensfusion6UpdateMag(float mx, float my, float mz);
+bool sensfusion6HasCompassYaw(void);
 void sensfusion6UpdateQ(float gx, float gy, float gz, float ax, float ay, float az, float dt);
 void sensfusion6GetQuaternion(float* qx, float* qy, float* qz, float* qw);
 void sensfusion6GetEulerRPY(float* roll, float* pitch, float* yaw);

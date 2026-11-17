@@ -130,6 +130,13 @@ static float qz_desired_delay = 0.0f;
 
 uint32_t timestamp_setpoint = 0;
 
+// Setpoint loss failsafe: no new setpoint for this long (radio link or PC
+// lost) stops the motors. They stay off until a new setpoint with zero
+// thrust arrives, the same way the thrust is unlocked after power-on. Only
+// the age of the setpoint is checked, nothing about the motion of the robot.
+#define SETPOINT_LOSS_TIMEOUT M2T(500)
+static uint8_t setpointLost = 1;  // log: 1 while the motors are held off
+
 static float external_loop_freq = 100.0f;
 // static uint32_t time_gap_setpoint = 10000;
 
@@ -527,6 +534,20 @@ static void stabilizerTask(void* param)
       }
       commanderGetSetpoint(&setpoint, &state);
 
+      // Setpoint loss failsafe, see SETPOINT_LOSS_TIMEOUT
+      if (xTaskGetTickCount() - setpoint.timestamp > SETPOINT_LOSS_TIMEOUT)
+      {
+        setpointLost = 1;
+      }
+      else if (setpoint.thrust < 10.0f)
+      {
+        setpointLost = 0;  // fresh setpoint with zero thrust: unlocked again
+      }
+      if (setpointLost)
+      {
+        setpoint.thrust = 0.0f;  // takes the motors-off branch below
+      }
+
       // Critical for safety, be careful if you modify this code!
       // Let the supervisor update it's view of the current situation
       // supervisorUpdate(&sensorData, &setpoint, stabilizerStep);
@@ -913,6 +934,10 @@ STATS_CNT_RATE_LOG_ADD(rtStab, &stabilizerRate)
  *    Note: Used for debugging but could also be used as a system test
  */
 LOG_ADD(LOG_UINT32, intToOut, &inToOutLatency)
+/**
+ * @brief 1 while the motors are held off by the setpoint loss failsafe
+ */
+LOG_ADD(LOG_UINT8, spLost, &setpointLost)
 LOG_GROUP_STOP(stabilizer)
 
 /**

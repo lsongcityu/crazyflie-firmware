@@ -284,6 +284,16 @@ static void decodeNavPvt(const uint8_t *p)
   pDOP    = getU2(&p[76]) * 0.01f;
 
   pvtCount++;
+
+  /* The estimator gets the whole solution in one piece through its queue;
+   * the variables above are updated one by one and are for logging only */
+  gpsMeasurement_t meas = {
+    .lat = lat, .lon = lon, .hMSL = hMSL,
+    .velN = velN, .velE = velE, .velD = velD,
+    .hAcc = hAcc, .vAcc = vAcc, .sAcc = sAcc,
+    .fixType = fixType, .fixOk = fixOk, .numSV = numSV,
+  };
+  estimatorEnqueueGps(&meas);
 }
 
 static void decodeAck(uint8_t msgId, const uint8_t *p)

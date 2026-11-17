@@ -357,6 +357,23 @@ typedef struct
   baro_t baro; // for legacy reasons
 } barometerMeasurement_t;
 
+/** GPS measurement, one UBX-NAV-PVT solution */
+typedef struct
+{
+  int32_t lat;      // 1e-7 deg
+  int32_t lon;      // 1e-7 deg
+  float hMSL;       // m
+  float velN;       // m/s
+  float velE;       // m/s
+  float velD;       // m/s
+  float hAcc;       // m, horizontal accuracy estimated by the receiver
+  float vAcc;       // m, vertical accuracy estimated by the receiver
+  float sAcc;       // m/s, speed accuracy estimated by the receiver
+  uint8_t fixType;  // 3: 3D fix
+  uint8_t fixOk;    // gnssFixOK flag
+  uint8_t numSV;
+} gpsMeasurement_t;
+
 /** magnetometer measurement, calibrated, body frame (x forward, y left, z up) */
 typedef struct
 {

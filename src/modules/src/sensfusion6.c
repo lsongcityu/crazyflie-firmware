@@ -145,6 +145,8 @@ bool sensfusion6Test(void)
  * -------------------------------------------------------------------------*/
 #define DEG2RAD (M_PI_F / 180.0f)
 #define RAD2DEG (180.0f / M_PI_F)
+// No compass sample for this long (10 samples at 100 Hz): stop correcting
+#define MAGYAW_TIMEOUT_S 0.1f
 
 enum {
   MAGYAW_NO_DATA = 0,
@@ -199,6 +201,13 @@ void sensfusion6UpdateMag(float mx, float my, float mz)
   magNew = true;
 }
 
+// true once the yaw has been set from the compass, i.e. the world frame of
+// the attitude is ENU and not just the heading at power-on
+bool sensfusion6HasCompassYaw(void)
+{
+  return haveInitialYaw;
+}
+
 static float wrap360(float a)
 {
   while (a >= 360.0f) a -= 360.0f;
@@ -229,6 +238,11 @@ static float magYawUpdate(float gx, float gy, float gz, float dt)
   logHeadGyro = wrap360(logHeadGyro - (r31 * gx + r32 * gy + r33 * gz) * dt);
 
   if (!magNew) {
+    if (magDt > MAGYAW_TIMEOUT_S) {
+      // compass lost: no correction, the yaw is the gyro integration only
+      yawCorr = 0.0f;
+      magYawStatus = MAGYAW_NO_DATA;
+    }
     return yawCorr;  // hold the last correction until the next sample
   }
   magNew = false;

@@ -29,3 +29,9 @@
 
 void positionEstimate(state_t* estimate, const baro_t* baro, const tofMeasurement_t* tofMeasurement, float dt, stabilizerStep_t stabilizerStep);
 void positionUpdateVelocity(float accWZ, float dt);
+void positionUpdateGpsHeight(const gpsMeasurement_t* gps);
+
+// Horizontal position, position_estimator_horizontal.c
+void positionXYPredict(float accE, float accN, float dt);
+void positionXYUpdateGps(const gpsMeasurement_t* gps);
+void positionXYGetState(state_t* estimate);

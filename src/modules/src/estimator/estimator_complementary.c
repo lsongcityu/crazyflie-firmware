@@ -37,6 +37,7 @@
 #include "sensors.h"
 #include "stabilizer_types.h"
 #include "static_mem.h"
+#include "physicalConstants.h"
 
 static Axis3f gyro;
 static Axis3f acc;
@@ -82,6 +83,11 @@ void estimatorComplementary(state_t *state, const stabilizerStep_t stabilizerSte
     case MeasurementTypeMagnetometer:
       sensfusion6UpdateMag(m.data.magnetometer.mag.x, m.data.magnetometer.mag.y, m.data.magnetometer.mag.z);
       break;
+    case MeasurementTypeGps:
+      // every GPS solution is used, not only the latest
+      positionXYUpdateGps(&m.data.gps);
+      positionUpdateGpsHeight(&m.data.gps);
+      break;
     case MeasurementTypeTOF:
       tof = m.data.tof;
       break;
@@ -112,6 +118,24 @@ void estimatorComplementary(state_t *state, const stabilizerStep_t stabilizerSte
                                                     acc.z);
 
     positionUpdateVelocity(state->acc.z, ATTITUDE_UPDATE_DT);
+
+    // Horizontal acc in the world frame (ENU once the compass has set the
+    // yaw), first two rows of the body -> world rotation matrix. Gravity has
+    // no horizontal part, so nothing is subtracted.
+    const float qx = state->attitudeQuaternion.x;
+    const float qy = state->attitudeQuaternion.y;
+    const float qz = state->attitudeQuaternion.z;
+    const float qw = state->attitudeQuaternion.w;
+    state->acc.x = (1.0f - 2.0f * (qy * qy + qz * qz)) * acc.x +
+                   2.0f * (qx * qy - qw * qz) * acc.y +
+                   2.0f * (qx * qz + qw * qy) * acc.z;
+    state->acc.y = 2.0f * (qx * qy + qw * qz) * acc.x +
+                   (1.0f - 2.0f * (qx * qx + qz * qz)) * acc.y +
+                   2.0f * (qy * qz - qw * qx) * acc.z;
+
+    positionXYPredict(state->acc.x * GRAVITY_MAGNITUDE, state->acc.y * GRAVITY_MAGNITUDE,
+                      ATTITUDE_UPDATE_DT);
+    positionXYGetState(state);
   }
 
   if (RATE_DO_EXECUTE(POS_UPDATE_RATE, stabilizerStep)) {
