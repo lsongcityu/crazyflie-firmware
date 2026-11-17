@@ -82,6 +82,7 @@ bool powerDistributionTest(void)
   return pass;
 }
 
+#ifndef CONFIG_MOTORS_REVERSIBLE
 static uint16_t capMinThrust(float thrust, uint32_t minThrust) {
   if (thrust < minThrust) {
     return minThrust;
@@ -89,6 +90,143 @@ static uint16_t capMinThrust(float thrust, uint32_t minThrust) {
 
   return thrust;
 }
+#endif
+
+#ifdef CONFIG_MOTORS_REVERSIBLE
+// [hopping] Reversible motors (DSHOT 3D mode). Local addition, not in upstream.
+//
+// This follows the arithmetic of the bidirectional_hopping branch (OneShot 3D):
+// all values are distances from the thrust midpoint 32750, in thrust setpoint
+// units, where 32750 would be the full range of one direction.
+//
+//   motor = (thrust - 32750) + min_thrust + attitude correction
+//
+// control->thrust is signed here: 0 = motors stopped, positive = forward,
+// negative = reverse. All four motors always share one direction.
+//
+// The only new part is the last step. A OneShot 3D ESC takes 32750 +- motor.
+// DSHOT 3D mode instead has two halves of 1000 steps: 1048..2047 is the normal
+// direction and 48..1047 the reversed one, slowest first.
+#define DSHOT_3D_FORWARD_MIN  1048
+#define DSHOT_3D_REVERSE_MIN  48
+#define DSHOT_3D_STEPS        999
+
+// Thrust convention of the reversible build, used for the radio thrust setpoint
+// and for the motorPowerSet override.
+#define REVERSIBLE_THRUST_MID         32750.0f
+#define REVERSIBLE_THRUST_DEADBAND    10.0f
+// The radio commander limits the thrust setpoint to 60000 and treats values
+// below 1000 as stop. Every motor is kept between the minimum spin and this
+// distance from the midpoint, in both directions (60000 forward, 5500 reverse).
+#define REVERSIBLE_THRUST_MAX_OFFSET  (60000.0f - REVERSIBLE_THRUST_MID)
+#define REVERSIBLE_THRUST_STOP_BELOW  1000
+
+// Set to 1 if forward and reverse turn out to be swapped on the robot
+static uint8_t swapDirection3d = 0;
+
+static void powerDistributionLegacyReversible(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped)
+{
+  const int32_t thrust = (int32_t)control->thrust;
+
+  if (thrust == 0)
+  {
+    for (int mi = 0; mi < STABILIZER_NR_OF_MOTORS; mi++)
+    {
+      motorThrustUncapped->list[mi] = 0;
+    }
+    return;
+  }
+
+  // A reversed propeller flips both its thrust and its yaw torque, so in the
+  // reversed direction the attitude terms change sign relative to the motor speed.
+  const int32_t direction = (thrust > 0) ? 1 : -1;
+
+  int32_t att[4];
+  att[0] = direction * (-control->roll + control->pitch + control->yaw);
+  att[1] = direction * (-control->roll - control->pitch - control->yaw);
+  att[2] = direction * (+control->roll - control->pitch + control->yaw);
+  att[3] = direction * (+control->roll + control->pitch - control->yaw);
+
+  int32_t min = att[0];
+  for (int mi = 1; mi < 4; mi++)
+  {
+    if (att[mi] < min)
+      min = att[mi];
+  }
+
+  // Keep every motor on the same side of the midpoint, then add the minimum spin
+  int32_t speed = direction * thrust;
+  if (speed < -min)
+    speed = -min;
+  speed = speed + min_thrust;
+
+  for (int mi = 0; mi < 4; mi++)
+  {
+    motorThrustUncapped->list[mi] = direction * (att[mi] + speed);
+  }
+}
+
+// Convert a signed distance from the midpoint to the 16 bit ratio that the
+// DSHOT driver turns into a 3D mode throttle value (the driver sends ratio >> 5).
+static uint16_t reversibleEncodeRatio(int32_t value)
+{
+  if (value == 0)
+  {
+    return 0; // DSHOT 0 = motor stop
+  }
+
+  const bool forward = (value > 0) != (swapDirection3d != 0);
+  const int32_t speed = (value > 0) ? value : -value;
+
+  // 32750 is the full range of one direction, DSHOT 3D has 1000 steps for it
+  int32_t steps = speed >> 5;
+  if (steps > DSHOT_3D_STEPS)
+    steps = DSHOT_3D_STEPS;
+
+  return (uint16_t)(((forward ? DSHOT_3D_FORWARD_MIN : DSHOT_3D_REVERSE_MIN) + steps) << 5);
+}
+
+float powerDistributionReversibleThrust(float setpointThrust)
+{
+  float offset = setpointThrust - REVERSIBLE_THRUST_MID;
+  if (fabsf(offset) <= REVERSIBLE_THRUST_DEADBAND)
+  {
+    return 1.0f; // smallest forward value: the motors turn at the minimum spin
+  }
+
+  if (offset > REVERSIBLE_THRUST_MAX_OFFSET)
+    offset = REVERSIBLE_THRUST_MAX_OFFSET;
+  if (offset < -REVERSIBLE_THRUST_MAX_OFFSET)
+    offset = -REVERSIBLE_THRUST_MAX_OFFSET;
+
+  return offset;
+}
+
+uint16_t powerDistributionReversibleRatio(uint16_t value)
+{
+  if (value < REVERSIBLE_THRUST_STOP_BELOW)
+  {
+    return 0; // motor stop
+  }
+
+  // Unlike the thrust setpoint, the override has no minimum spin: 32750 is
+  // "motor stopped", like the midpoint of a OneShot 3D ESC, and the speed
+  // grows from the ESC minimum on either side.
+  float offset = (float)value - REVERSIBLE_THRUST_MID;
+  if (fabsf(offset) <= REVERSIBLE_THRUST_DEADBAND)
+  {
+    return 0; // motor stop
+  }
+
+  if (offset > REVERSIBLE_THRUST_MAX_OFFSET)
+    offset = REVERSIBLE_THRUST_MAX_OFFSET;
+  if (offset < -REVERSIBLE_THRUST_MAX_OFFSET)
+    offset = -REVERSIBLE_THRUST_MAX_OFFSET;
+
+  return reversibleEncodeRatio((int32_t)offset);
+}
+
+#else // CONFIG_MOTORS_REVERSIBLE
 
 static void powerDistributionLegacy(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped)
 {
@@ -132,6 +270,7 @@ static void powerDistributionLegacy(const control_t *control, motors_thrust_unca
   // motorThrustUncapped->motors.m3 = control->thrust + r - p + control->yaw;
   // motorThrustUncapped->motors.m4 = control->thrust + r + p - control->yaw;
 }
+#endif // CONFIG_MOTORS_REVERSIBLE
 
 static void powerDistributionForceTorque(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped) {
   static float motorForces[STABILIZER_NR_OF_MOTORS];
@@ -166,7 +305,11 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t* motor
 {
   switch (control->controlMode) {
     case controlModeLegacy:
+#ifdef CONFIG_MOTORS_REVERSIBLE
+      powerDistributionLegacyReversible(control, motorThrustUncapped);
+#else
       powerDistributionLegacy(control, motorThrustUncapped);
+#endif
       break;
     case controlModeForceTorque:
       powerDistributionForceTorque(control, motorThrustUncapped);
@@ -184,6 +327,58 @@ bool powerDistributionCap(const motors_thrust_uncapped_t* motorThrustBatCompUnca
 {
   const int32_t maxAllowedThrust = UINT16_MAX;
   bool isCapped = false;
+
+#ifdef CONFIG_MOTORS_REVERSIBLE
+  // [hopping] The values are signed distances from the midpoint. Keep every
+  // motor between the minimum spin and the maximum distance (32750+3000..60000
+  // forward, 32750-3000..5500 reverse). A common reduction is tried first, as in
+  // the one-direction code below, so the attitude differences are kept when possible.
+  // powerDist.idleThrust is not used.
+  (void)maxAllowedThrust;
+  const int32_t maxSpeed = (int32_t)REVERSIBLE_THRUST_MAX_OFFSET;
+  const int32_t minSpeed = min_thrust;
+
+  int32_t highestSpeedFound = 0;
+  for (int motorIndex = 0; motorIndex < STABILIZER_NR_OF_MOTORS; motorIndex++)
+  {
+    const int32_t value = motorThrustBatCompUncapped->list[motorIndex];
+    const int32_t speed = (value > 0) ? value : -value;
+    if (speed > highestSpeedFound)
+    {
+      highestSpeedFound = speed;
+    }
+  }
+
+  int32_t speedReduction = 0;
+  if (highestSpeedFound > maxSpeed)
+  {
+    speedReduction = highestSpeedFound - maxSpeed;
+    isCapped = true;
+  }
+
+  for (int motorIndex = 0; motorIndex < STABILIZER_NR_OF_MOTORS; motorIndex++)
+  {
+    const int32_t value = motorThrustBatCompUncapped->list[motorIndex];
+    if (value == 0)
+    {
+      motorPwm->list[motorIndex] = 0; // motor stop
+      continue;
+    }
+
+    int32_t speed = ((value > 0) ? value : -value) - speedReduction;
+    if (speed < minSpeed)
+    {
+      speed = minSpeed; // never below the minimum spin, so the motor does not stall
+    }
+    if (speed > maxSpeed)
+    {
+      speed = maxSpeed;
+    }
+    motorPwm->list[motorIndex] = reversibleEncodeRatio((value > 0) ? speed : -speed);
+  }
+
+  return isCapped;
+#else
 
   // Find highest thrust
   int32_t highestThrustFound = 0;
@@ -210,6 +405,7 @@ bool powerDistributionCap(const motors_thrust_uncapped_t* motorThrustBatCompUnca
   }
 
   return isCapped;
+#endif // CONFIG_MOTORS_REVERSIBLE
 }
 
 uint32_t powerDistributionGetIdleThrust()
@@ -239,6 +435,12 @@ PARAM_GROUP_START(powerDist)
  * common value is between 3000 - 6000.
  */
 PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, idleThrust, &idleThrust)
+#ifdef CONFIG_MOTORS_REVERSIBLE
+/**
+ * @brief [hopping] Reversible build only: set to 1 if forward and reverse thrust are swapped (default: 0)
+ */
+PARAM_ADD(PARAM_UINT8 | PARAM_PERSISTENT, swap3d, &swapDirection3d)
+#endif
 PARAM_GROUP_STOP(powerDist)
 
 /**

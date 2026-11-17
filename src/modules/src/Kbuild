@@ -39,6 +39,7 @@ obj-y += serial_4way_avrootloader.o
 obj-y += serial_4way.o
 obj-y += sound_cf2.o
 obj-y += stabilizer.o
+obj-y += hopcopter_controller.o
 obj-y += static_mem.o
 obj-y += supervisor.o
 obj-y += supervisor_state_machine.o

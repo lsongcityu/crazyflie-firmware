@@ -76,4 +76,33 @@ uint32_t powerDistributionGetIdleThrust();
  */
 float powerDistributionGetMaxThrust();
 
+#ifdef CONFIG_MOTORS_REVERSIBLE
+// [hopping] Reversible motors (DSHOT 3D mode). Local addition, not in upstream.
+
+/**
+ * @brief Decode a thrust value that uses the reversible convention.
+ *
+ * 32750 = zero thrust (motors turn forward at minimum speed), above = forward,
+ * below = reverse, growing with the distance from 32750. Forward and reverse
+ * are limited to the same size (60000 on the forward side, 5500 on the reverse side).
+ *
+ * @param setpointThrust Thrust in the reversible convention. Must not be the "stop" value 0.
+ * @return Signed distance from 32750, positive = forward (32750 would be the
+ *         full range of one direction). Never 0.
+ */
+float powerDistributionReversibleThrust(float setpointThrust);
+
+/**
+ * @brief Convert a motor value in the reversible convention straight to the
+ * ratio for the DSHOT driver. Used for the motorPowerSet override.
+ *
+ * Unlike the thrust setpoint there is no minimum spin: below 1000 and
+ * 32750 +-10 are "motor stopped", above = forward, below = reverse.
+ *
+ * @param value Motor value in the reversible convention
+ * @return Ratio for motorsSetRatio()
+ */
+uint16_t powerDistributionReversibleRatio(uint16_t value);
+#endif
+
 #endif //__POWER_DISTRIBUTION_H__
