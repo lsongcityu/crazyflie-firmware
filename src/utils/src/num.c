@@ -58,7 +58,9 @@ uint16_t single2half(float number)
     if (e<(127-15))
         return 0; //Do not handle generating subnormalised representation
 
-    return (s<<15) | ((e-127+15)<<10) | (((num>>13)&0x3FF)+((num>>12)&0x01));
+    // Add, not OR, the rounded mantissa: when rounding carries out of the 10 mantissa
+    // bits it must increase the exponent (1.9999 -> 2.0, not 1.0)
+    return (s<<15) | (((e-127+15)<<10) + (((num>>13)&0x3FF)+((num>>12)&0x01)));
 }
 
 float half2single(uint16_t number)

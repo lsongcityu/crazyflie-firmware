@@ -136,3 +136,30 @@ void testThatDeadbandOutsideDeadbandNegative() {
   // Assert
   TEST_ASSERT_EQUAL_FLOAT(expected, actual);
 }
+
+
+void testThatSingle2halfRoundsUpToTheNextPowerOfTwo() {
+  // Values within half a step below a power of two round up into the next exponent
+  TEST_ASSERT_EQUAL_HEX16(0x4000, single2half(1.9999f));  // 2.0
+  TEST_ASSERT_EQUAL_HEX16(0x3800, single2half(0.4999f));  // 0.5
+  TEST_ASSERT_EQUAL_HEX16(0x4800, single2half(7.9999f));  // 8.0
+  TEST_ASSERT_EQUAL_HEX16(0xC000, single2half(-1.9999f)); // -2.0
+}
+
+
+void testThatSingle2halfConvertsExactValues() {
+  TEST_ASSERT_EQUAL_HEX16(0x3C00, single2half(1.0f));
+  TEST_ASSERT_EQUAL_HEX16(0x4000, single2half(2.0f));
+  TEST_ASSERT_EQUAL_HEX16(0xC100, single2half(-2.5f));
+  TEST_ASSERT_EQUAL_HEX16(0x0000, single2half(0.0f));
+  TEST_ASSERT_EQUAL_HEX16(0x7C00, single2half(1.0e6f));   // +inf
+}
+
+
+void testThatSingle2halfRoundTripIsWithinHalfAStep() {
+  // Half a step of a 10-bit mantissa is at most 2^-11 of the value
+  for (float value = 0.001f; value < 60000.0f; value *= 1.0001f) {
+    float actual = half2single(single2half(value));
+    TEST_ASSERT_FLOAT_WITHIN(value * 0.0005f, value, actual);
+  }
+}
