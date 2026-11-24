@@ -3,5 +3,7 @@ CONFIG_PLATFORM_BOLT=y
 CONFIG_ESTIMATOR_AUTO_SELECT=y
 CONFIG_CONTROLLER_AUTO_SELECT=y
 
-# Bolt with a DShot ESC (bidirectional DShot RPM telemetry is on by default).
+# Bolt with a DShot ESC. Bidirectional DShot (RPM telemetry) is turned off here,
+# since not all ESCs support it. Set it to y for ESCs that do, e.g. Bluejay.
 CONFIG_MOTORS_ESC_PROTOCOL_DSHOT=y
+CONFIG_MOTORS_ESC_PROTOCOL_DSHOT_BIDIRECTIONAL=n

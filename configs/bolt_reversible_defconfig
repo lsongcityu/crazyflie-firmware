@@ -4,6 +4,8 @@ CONFIG_ESTIMATOR_AUTO_SELECT=y
 CONFIG_CONTROLLER_AUTO_SELECT=y
 
 # Bolt with a DShot ESC and reversible motors (DShot 3D mode).
+# Bidirectional DShot (RPM telemetry) is turned off here; set CONFIG_MOTORS_ESC_PROTOCOL_DSHOT_BIDIRECTIONAL to y if the ESC supports it.
 # Thrust setpoint: 0 = stop, 32750 = zero thrust, above = forward, below = reverse.
 CONFIG_MOTORS_ESC_PROTOCOL_DSHOT=y
 CONFIG_MOTORS_REVERSIBLE=y
+CONFIG_MOTORS_ESC_PROTOCOL_DSHOT_BIDIRECTIONAL=n
