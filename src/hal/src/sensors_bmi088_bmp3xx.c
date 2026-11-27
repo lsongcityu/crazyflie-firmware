@@ -126,6 +126,8 @@ static volatile uint64_t imuIntTimestamp;
 
 static Axis3i16 gyroRaw;
 static Axis3i16 accelRaw;
+static Axis3f accUnfiltered;  // acc before the low-pass filter, logged as accUnf
+static Axis3f gyroUnfiltered; // gyro before the low-pass filter, logged as gyroUnf
 NO_DMA_CCM_SAFE_ZERO_INIT static BiasObj gyroBiasRunning;
 static Axis3f gyroBias;
 #if defined(SENSORS_GYRO_BIAS_CALCULATE_STDDEV) && defined (GYRO_BIAS_LIGHT_WEIGHT)
@@ -322,6 +324,7 @@ static void sensorsTask(void *param)
       gyroScaledIMU.y =  (gyroRaw.y - gyroBias.y) * SENSORS_BMI088_DEG_PER_LSB_CFG;
       gyroScaledIMU.z =  (gyroRaw.z - gyroBias.z) * SENSORS_BMI088_DEG_PER_LSB_CFG;
       sensorsAlignToAirframe(&gyroScaledIMU, &sensorData.gyro);
+      gyroUnfiltered = sensorData.gyro;
       applyAxis3fLpf((lpf2pData*)(&gyroLpf), &sensorData.gyro);
 
       measurement.type = MeasurementTypeGyroscope;
@@ -334,6 +337,7 @@ static void sensorsTask(void *param)
       accScaledIMU.z = accelRaw.z * SENSORS_BMI088_G_PER_LSB_CFG / accScale;
       sensorsAlignToAirframe(&accScaledIMU, &accScaled);
       sensorsAccAlignToGravity(&accScaled, &sensorData.acc);
+      accUnfiltered = sensorData.acc;
       applyAxis3fLpf((lpf2pData*)(&accLpf), &sensorData.acc);
 
       measurement.type = MeasurementTypeAcceleration;
@@ -1009,6 +1013,42 @@ LOG_ADD(LOG_FLOAT, yVariance, &gyroBiasRunning.variance.y)
 LOG_ADD(LOG_FLOAT, zVariance, &gyroBiasRunning.variance.z)
 LOG_GROUP_STOP(gyro)
 #endif
+
+/**
+ * Accelerometer before the 30 Hz low-pass filter: same scale and frame as acc.x/y/z
+ */
+LOG_GROUP_START(accUnf)
+/**
+ * @brief Acceleration x before the low-pass filter (Gs)
+ */
+LOG_ADD(LOG_FLOAT, x, &accUnfiltered.x)
+/**
+ * @brief Acceleration y before the low-pass filter (Gs)
+ */
+LOG_ADD(LOG_FLOAT, y, &accUnfiltered.y)
+/**
+ * @brief Acceleration z before the low-pass filter (Gs)
+ */
+LOG_ADD(LOG_FLOAT, z, &accUnfiltered.z)
+LOG_GROUP_STOP(accUnf)
+
+/**
+ * Gyro before the 80 Hz low-pass filter: same scale, bias correction and frame as gyro.x/y/z
+ */
+LOG_GROUP_START(gyroUnf)
+/**
+ * @brief Angular velocity x before the low-pass filter (deg/s)
+ */
+LOG_ADD(LOG_FLOAT, x, &gyroUnfiltered.x)
+/**
+ * @brief Angular velocity y before the low-pass filter (deg/s)
+ */
+LOG_ADD(LOG_FLOAT, y, &gyroUnfiltered.y)
+/**
+ * @brief Angular velocity z before the low-pass filter (deg/s)
+ */
+LOG_ADD(LOG_FLOAT, z, &gyroUnfiltered.z)
+LOG_GROUP_STOP(gyroUnf)
 
 PARAM_GROUP_START(imu_sensors)
 
